@@ -1,0 +1,2152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VaastuCAD — Interactive Floor Plan Builder</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,600;1,400&display=swap');
+:root{
+  --bg:       #0c1018;
+  --bg1:      #141a24;
+  --bg2:      #1b2333;
+  --bd:       #2a3650;
+  --gold:     #d4a843;
+  --gold2:    rgba(212,168,67,0.12);
+  --teal:     #4ecdc4;
+  --txt:      #dde4ee;
+  --muted:    #8b97aa;
+  --dim:      #4a5568;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt)}
+/* ── layout ── */
+#app{display:flex;flex-direction:column;height:100vh}
+#hdr{display:flex;align-items:center;justify-content:space-between;padding:8px 18px;background:var(--bg1);border-bottom:1px solid var(--bd);flex-shrink:0;z-index:20}
+#body{display:flex;flex:1;overflow:hidden;min-height:0}
+/* ── panels ── */
+.lpanel{width:252px;flex-shrink:0;background:var(--bg2);border-right:1px solid var(--bd);overflow-y:auto;padding:12px 10px;display:flex;flex-direction:column;gap:10px}
+.lpanel::-webkit-scrollbar{width:3px}
+.lpanel::-webkit-scrollbar-thumb{background:var(--bd)}
+.rpanel{width:238px;flex-shrink:0;background:var(--bg2);border-left:1px solid var(--bd);overflow-y:auto;display:flex;flex-direction:column}
+.rpanel::-webkit-scrollbar{width:3px}
+.rpanel::-webkit-scrollbar-thumb{background:var(--bd)}
+/* ── canvas ── */
+#carea{flex:1;position:relative;background:#090e16;overflow:hidden}
+#cv{display:block;position:absolute;inset:0}
+/* ── card ── */
+.card{background:var(--bg1);border:1px solid var(--bd);border-radius:10px;padding:12px}
+.stitle{font-size:9.5px;font-weight:700;color:var(--gold);letter-spacing:2.2px;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.stitle::after{content:'';flex:1;height:1px;background:var(--bd)}
+/* ── inputs ── */
+.row2{display:flex;gap:7px}
+.ig{flex:1}
+.ilb{display:block;font-size:10px;color:var(--muted);margin-bottom:3px}
+.ifield{width:100%;background:var(--bg);border:1px solid var(--bd);border-radius:6px;color:var(--txt);padding:6px 9px;font-size:12px;font-family:'Inter',sans-serif;outline:none;transition:border .18s}
+.ifield:focus{border-color:var(--gold)}
+/* ── shape grid ── */
+.sgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}
+.sbtn{background:var(--bg);border:1px solid var(--bd);border-radius:7px;padding:7px 3px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--dim);font-size:9.5px;font-weight:500;transition:all .18s}
+.sbtn:hover{border-color:var(--gold);color:var(--gold);background:var(--gold2)}
+.sbtn.act{border-color:var(--gold);background:var(--gold2);color:var(--gold)}
+/* ── checks ── */
+.chk{display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid #1e2a3a;cursor:pointer;user-select:none}
+.chk:last-child{border-bottom:none}
+.cbox{width:15px;height:15px;flex-shrink:0;border:1.5px solid var(--bd);border-radius:4px;margin-top:2px;display:flex;align-items:center;justify-content:center;background:var(--bg);transition:all .18s}
+.cbox.on{background:var(--gold);border-color:var(--gold)}
+.clb{font-size:11.5px;color:var(--txt);line-height:1.35}
+.csb{font-size:9.5px;color:var(--muted)}
+/* ── buttons ── */
+.btn1{width:100%;background:var(--gold);color:#09100f;border:none;border-radius:7px;padding:8px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;letter-spacing:.4px;transition:opacity .18s}
+.btn1:hover{opacity:.88}
+.btn2{width:100%;background:transparent;color:var(--muted);border:1px solid var(--bd);border-radius:7px;padding:8px;font-size:11px;font-weight:500;cursor:pointer;font-family:'Inter',sans-serif;transition:all .18s}
+.btn2:hover{border-color:var(--muted);color:var(--txt)}
+/* ── toolbar ── */
+#tbar{position:absolute;top:10px;left:50%;transform:translateX(-50%);display:flex;gap:4px;background:var(--bg1);border:1px solid var(--bd);border-radius:8px;padding:5px 7px;z-index:10}
+.tbtn{background:transparent;border:none;color:var(--muted);cursor:pointer;padding:4px 9px;border-radius:5px;font-size:10.5px;font-family:'Inter',sans-serif;display:flex;align-items:center;gap:4px;transition:all .18s}
+.tbtn:hover{background:var(--bd);color:var(--txt)}
+.tbtn.act{background:var(--gold2);color:var(--gold)}
+#scaleInfo{position:absolute;bottom:10px;left:10px;font-size:9.5px;color:var(--dim);background:rgba(9,14,22,.82);padding:3px 8px;border-radius:4px;border:1px solid var(--bd)}
+#coordInfo{position:absolute;bottom:10px;right:10px;font-size:9.5px;color:var(--dim);background:rgba(9,14,22,.82);padding:3px 8px;border-radius:4px;border:1px solid var(--bd)}
+/* ── right panel ── */
+#rphdr{padding:14px 16px 10px;background:var(--bg1);border-bottom:1px solid var(--bd);text-align:center}
+#rphdr h3{font-family:'Playfair Display',serif;font-size:14px;color:var(--gold);margin-bottom:3px}
+#rphdr p{font-size:9.5px;color:var(--muted);letter-spacing:1.5px}
+#zmsg{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;padding:20px 14px;text-align:center;color:var(--dim)}
+#zmsg svg{opacity:.3;margin-bottom:10px}
+#zmsg p{font-size:10.5px;line-height:1.65}
+#zcard{padding:14px;display:none}
+.irow{display:flex;align-items:flex-start;gap:7px;margin-bottom:7px;padding:7px;background:var(--bg1);border-radius:6px;border:1px solid var(--bd)}
+.irl{font-size:8.5px;color:var(--dim);letter-spacing:1.5px;text-transform:uppercase;flex-shrink:0;width:52px;padding-top:1px}
+.irv{font-size:10.5px;color:var(--txt);line-height:1.4}
+.dil,.xil{font-size:9.5px;color:var(--muted);padding:2px 0 2px 11px;position:relative;line-height:1.45}
+.dil::before{content:'✓';position:absolute;left:0;color:#4ade80;font-size:9px}
+.xil::before{content:'✗';position:absolute;left:0;color:#f87171;font-size:9px}
+.dtit{font-size:9.5px;font-weight:700;display:flex;align-items:center;gap:4px;margin-bottom:4px}
+/* ── logo ── */
+.logo{display:flex;align-items:center;gap:9px}
+.logo-text{font-family:'Playfair Display',serif;font-size:17px;color:var(--gold)}
+.logo-sub{font-size:9.5px;color:var(--muted);letter-spacing:2px;text-transform:uppercase}
+
+/* ── right panel tabs ── */
+.rptabs{display:flex;border-bottom:1px solid var(--bd);flex-shrink:0}
+.rptab{flex:1;padding:9px 4px;font-size:9.5px;font-weight:600;letter-spacing:.8px;text-transform:uppercase;cursor:pointer;text-align:center;color:var(--dim);border-bottom:2px solid transparent;transition:all .18s;background:transparent;border-top:none;border-left:none;border-right:none;font-family:'Inter',sans-serif}
+.rptab:hover{color:var(--muted)}
+.rptab.act{color:var(--gold);border-bottom-color:var(--gold)}
+.rptabcontent{display:none;flex-direction:column;flex:1;overflow:hidden}
+.rptabcontent.act{display:flex}
+
+/* ── image upload zone ── */
+#imgDropZone{
+  margin:12px;border:2px dashed var(--bd);border-radius:10px;
+  padding:20px 12px;text-align:center;cursor:pointer;transition:all .2s;
+  background:var(--bg);flex-shrink:0;
+}
+#imgDropZone:hover,#imgDropZone.dragover{border-color:var(--gold);background:var(--gold2)}
+#imgDropZone svg{margin:0 auto 8px;display:block;opacity:.4}
+#imgDropZone p{font-size:10px;color:var(--muted);line-height:1.6}
+#imgDropZone span{color:var(--gold);font-weight:600}
+#imgThumb{margin:0 12px 0;border-radius:8px;overflow:hidden;border:1px solid var(--bd);position:relative;display:none;flex-shrink:0}
+#imgThumb img{width:100%;display:block;max-height:140px;object-fit:cover}
+#imgThumbBar{display:flex;gap:6px;padding:7px;background:var(--bg1)}
+.ithbtn{flex:1;background:var(--bg);border:1px solid var(--bd);border-radius:5px;color:var(--muted);font-size:9.5px;padding:5px 4px;cursor:pointer;font-family:'Inter',sans-serif;transition:all .18s;text-align:center}
+.ithbtn:hover{border-color:var(--gold);color:var(--gold)}
+.ithbtn.gold{background:var(--gold);color:#09100f;border-color:var(--gold);font-weight:700}
+.ithbtn.gold:hover{opacity:.85}
+
+/* ── canvas image overlay controls ── */
+#imgOverlayBar{position:absolute;bottom:42px;left:50%;transform:translateX(-50%);display:none;gap:6px;background:var(--bg1);border:1px solid var(--bd);border-radius:8px;padding:5px 8px;z-index:15;align-items:center}
+#imgOverlayBar label{font-size:9.5px;color:var(--muted)}
+#imgOpacity{width:70px;accent-color:var(--gold)}
+#imgBlendBtn{background:var(--gold2);border:1px solid var(--gold);border-radius:5px;color:var(--gold);font-size:9px;padding:3px 8px;cursor:pointer;font-family:'Inter',sans-serif}
+#imgRemoveBtn{background:rgba(239,68,68,.15);border:1px solid #f87171;border-radius:5px;color:#f87171;font-size:9px;padding:3px 8px;cursor:pointer;font-family:'Inter',sans-serif}
+
+/* ── AI analysis output ── */
+#aiPanel{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px}
+#aiPanel::-webkit-scrollbar{width:3px}
+#aiPanel::-webkit-scrollbar-thumb{background:var(--bd)}
+.ai-idle{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;text-align:center;color:var(--dim);padding:20px}
+.ai-idle svg{opacity:.25;margin-bottom:10px}
+.ai-idle p{font-size:10.5px;line-height:1.65}
+.ai-score-ring{display:flex;justify-content:center;margin-bottom:8px}
+.score-circle{width:72px;height:72px;border-radius:50%;border:3px solid;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:'Playfair Display',serif}
+.score-num{font-size:20px;font-weight:700}
+.score-lbl{font-size:8px;letter-spacing:1px;text-transform:uppercase;margin-top:-2px}
+.ai-section{background:var(--bg1);border:1px solid var(--bd);border-radius:8px;padding:10px}
+.ai-sec-title{font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:5px}
+.ai-item{display:flex;align-items:flex-start;gap:7px;margin-bottom:7px;font-size:10px;line-height:1.5;color:var(--muted)}
+.ai-item:last-child{margin-bottom:0}
+.ai-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;margin-top:3px}
+.ai-ref{font-size:8.5px;color:var(--dim);border-top:1px solid var(--bd);padding-top:8px;margin-top:4px;line-height:1.6}
+.ai-ref a{color:var(--gold);text-decoration:none}
+.ai-ref a:hover{text-decoration:underline}
+.ai-loading{display:flex;align-items:center;gap:8px;padding:12px;color:var(--muted);font-size:10.5px}
+.ai-spinner{width:16px;height:16px;border:2px solid var(--bd);border-top-color:var(--gold);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+.tip-chip{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:12px;font-size:9px;font-weight:600;margin:2px 2px 2px 0;border:1px solid}
+
+/* ── chat panel ── */
+#chatWrap{flex:1;display:flex;flex-direction:column;overflow:hidden}
+#chatMsgs{flex:1;overflow-y:auto;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+#chatMsgs::-webkit-scrollbar{width:3px}
+#chatMsgs::-webkit-scrollbar-thumb{background:var(--bd)}
+.cmsg{max-width:92%;padding:8px 10px;border-radius:8px;font-size:10.5px;line-height:1.55}
+.cmsg.user{background:var(--gold2);border:1px solid rgba(212,168,67,.3);color:var(--txt);align-self:flex-end;border-bottom-right-radius:3px}
+.cmsg.bot{background:var(--bg1);border:1px solid var(--bd);color:var(--txt);align-self:flex-start;border-bottom-left-radius:3px}
+.cmsg.bot .ref-links{margin-top:6px;padding-top:6px;border-top:1px solid var(--bd);font-size:8.5px;color:var(--dim)}
+.cmsg.bot .ref-links a{color:var(--gold);text-decoration:none;display:block;line-height:1.8}
+.cmsg.bot .ref-links a:hover{text-decoration:underline}
+.ctyping{display:flex;gap:3px;align-items:center;padding:10px 12px;align-self:flex-start}
+.ctyping span{width:5px;height:5px;border-radius:50%;background:var(--muted);animation:bounce .8s infinite}
+.ctyping span:nth-child(2){animation-delay:.15s}
+.ctyping span:nth-child(3){animation-delay:.3s}
+@keyframes bounce{0%,80%,100%{transform:translateY(0)}40%{transform:translateY(-5px)}}
+#chatInput{display:flex;gap:6px;padding:8px 10px;border-top:1px solid var(--bd);flex-shrink:0}
+#chatInput textarea{flex:1;background:var(--bg);border:1px solid var(--bd);border-radius:6px;color:var(--txt);padding:7px 9px;font-size:11px;font-family:'Inter',sans-serif;outline:none;resize:none;height:52px;line-height:1.45;transition:border .18s}
+#chatInput textarea:focus{border-color:var(--gold)}
+#chatSend{background:var(--gold);border:none;border-radius:6px;width:36px;flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:opacity .18s}
+#chatSend:hover{opacity:.85}
+.qchip{background:var(--bg);border:1px solid var(--bd);border-radius:14px;padding:4px 10px;font-size:9.5px;color:var(--muted);cursor:pointer;transition:all .18s;white-space:nowrap}
+.qchip:hover{border-color:var(--gold);color:var(--gold)}
+#suggestRow{display:flex;gap:5px;padding:6px 10px 0;overflow-x:auto;flex-shrink:0}
+#suggestRow::-webkit-scrollbar{height:0}
+
+/* ── compass ruler bar ── */
+#compassWrap{
+  flex-shrink:0;
+  background:var(--bg1);
+  border-top:1px solid var(--bd);
+  padding:0;
+  position:relative;
+  height:62px;
+  overflow:hidden;
+  display:flex;
+  flex-direction:column;
+  user-select:none;
+}
+#compassBar{
+  display:block;
+  width:100%;
+  height:100%;
+  cursor:ew-resize;
+}
+#compassLabel{
+  position:absolute;
+  top:4px;
+  left:10px;
+  font-size:8.5px;
+  font-weight:700;
+  color:var(--gold);
+  letter-spacing:2px;
+  text-transform:uppercase;
+  pointer-events:none;
+}
+#compassAngle{
+  position:absolute;
+  top:4px;
+  right:10px;
+  font-size:9px;
+  color:var(--muted);
+  pointer-events:none;
+  font-variant-numeric:tabular-nums;
+}
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- ═══ HEADER ═══ -->
+<header id="hdr">
+  <div class="logo">
+    <svg width="30" height="30" viewBox="0 0 30 30" fill="none">
+      <rect width="30" height="30" rx="5" fill="#1b2333"/>
+      <polygon points="15,2 28,8.5 28,21.5 15,28 2,21.5 2,8.5" stroke="#d4a843" stroke-width="1.4" fill="none"/>
+      <circle cx="15" cy="15" r="2.8" fill="#d4a843" opacity=".85"/>
+      <line x1="15" y1="2" x2="15" y2="28" stroke="#d4a843" stroke-width=".5" opacity=".3"/>
+      <line x1="2" y1="8.5" x2="28" y2="21.5" stroke="#d4a843" stroke-width=".5" opacity=".3"/>
+      <line x1="2" y1="21.5" x2="28" y2="8.5" stroke="#d4a843" stroke-width=".5" opacity=".3"/>
+    </svg>
+    <div>
+      <div class="logo-text">VaastuCAD</div>
+      <div class="logo-sub">Floor Plan Builder</div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:14px">
+    <span style="font-size:10.5px;color:var(--muted)">16-Zone Vaastu Shastra Analysis · CAD Engine</span>
+    <div style="width:7px;height:7px;border-radius:50%;background:#4ade80;box-shadow:0 0 6px #4ade80aa"></div>
+  </div>
+</header>
+
+<div id="body">
+
+<!-- ═══ LEFT PANEL ═══ -->
+<aside class="lpanel">
+
+  <div class="card">
+    <div class="stitle">Dimensions</div>
+    <div class="row2">
+      <div class="ig"><label class="ilb">Length (ft)</label><input class="ifield" type="number" id="inL" value="40" min="8" max="300"></div>
+      <div class="ig"><label class="ilb">Breadth (ft)</label><input class="ifield" type="number" id="inB" value="30" min="8" max="300"></div>
+    </div>
+    <div style="display:flex;gap:6px;margin-top:8px">
+      <div class="ig"><label class="ilb">Scale (px/ft)</label><input class="ifield" type="number" id="inScale" value="11" min="4" max="30"></div>
+      <div class="ig" style="display:flex;flex-direction:column;justify-content:flex-end"><button class="btn1" onclick="applyDims()">Apply</button></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="stitle">Floor Shape</div>
+    <div class="sgrid" id="sgrid"></div>
+  </div>
+
+  <div class="card">
+    <div class="stitle">Vaastu Layers</div>
+    <div id="layerchecks">
+      <div class="chk" onclick="toggleLayer('zones')"><div class="cbox on" id="ck-zones"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#09100f" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg></div><div><div class="clb">16 Zones &amp; Directions</div><div class="csb">Colour-coded wedges</div></div></div>
+      <div class="chk" onclick="toggleLayer('pada')"><div class="cbox" id="ck-pada"></div><div><div class="clb">Pada Grid (9 × 9)</div><div class="csb">81-square Vastu grid</div></div></div>
+      <div class="chk" onclick="toggleLayer('devta')"><div class="cbox" id="ck-devta"></div><div><div class="clb">Devta Names</div><div class="csb">Sanskrit deity labels</div></div></div>
+      <div class="chk" onclick="toggleLayer('attr')"><div class="cbox" id="ck-attr"></div><div><div class="clb">Characteristics</div><div class="csb">Zone energy attributes</div></div></div>
+      <div class="chk" onclick="toggleLayer('rooms')"><div class="cbox" id="ck-rooms"></div><div><div class="clb">Room Recommendations</div><div class="csb">Optimal placements</div></div></div>
+      <div class="chk" onclick="toggleLayer('pts16')"><div class="cbox" id="ck-pts16"></div><div><div class="clb">16 Wall Points</div><div class="csb">Radial markers on boundary</div></div></div>
+      <div class="chk" onclick="toggleLayer('brahma')"><div class="cbox on" id="ck-brahma"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#09100f" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg></div><div><div class="clb">Brahmasthan</div><div class="csb">Centre glow &amp; pivot</div></div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="stitle">Tools</div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <button class="btn2" onclick="fitToView()">⊞ Fit to View</button>
+      <button class="btn2" onclick="resetShape()">↺ Reset Shape</button>
+      <button class="btn2" onclick="clearAll()">⊘ Clear Canvas</button>
+    </div>
+    <div style="margin-top:10px;padding:8px;background:var(--bg);border-radius:6px;border:1px solid var(--bd);font-size:9.5px;color:var(--dim);line-height:1.6">
+      <b style="color:var(--muted)">Tip:</b> Drag <span style="color:var(--gold)">●</span> corners to reshape.  Drag <span style="color:var(--teal)">◆</span> edge midpoints to push walls.  Click any zone to inspect.
+    </div>
+  </div>
+
+</aside>
+
+<!-- ═══ CANVAS ═══ -->
+<main id="carea">
+  <div id="tbar">
+    <button class="tbtn act" id="t-sel" onclick="setTool('sel')">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 3 7 17 2.5-7.4 7.4-2.5L3 3z"/></svg>Select
+    </button>
+    <button class="tbtn" id="t-pan" onclick="setTool('pan')">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0m0 6V2a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0v10"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></svg>Pan
+    </button>
+    <div style="width:1px;background:var(--bd);margin:2px 3px"></div>
+    <button class="tbtn" onclick="zoomBy(1.25)">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>+
+    </button>
+    <button class="tbtn" onclick="zoomBy(0.8)">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></svg>−
+    </button>
+    <button class="tbtn" onclick="fitToView()">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>Fit
+    </button>
+    <div style="width:1px;background:var(--bd);margin:2px 3px"></div>
+    <button class="tbtn" id="t-snap" onclick="toggleSnap()">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3"/></svg>Snap
+    </button>
+    <div style="width:1px;background:var(--bd);margin:2px 3px"></div>
+    <button class="tbtn" id="t-rot" onclick="setTool('rot')" title="Rotate Vaastu Layers — drag around centroid">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6"/><path d="M2.5 12a10 10 0 1 1 .5 5"/></svg>Rotate
+    </button>
+    <div style="display:flex;align-items:center;gap:5px;padding:0 4px;border-left:1px solid var(--bd);margin-left:2px">
+      <span style="font-size:9px;color:var(--muted)">Vaastu</span>
+      <span id="rotReadout" style="font-size:11px;font-weight:700;color:var(--gold);min-width:36px;text-align:right;font-variant-numeric:tabular-nums">0°</span>
+      <button class="tbtn" onclick="resetVaastuRot()" title="Reset rotation to 0°" style="padding:2px 5px;font-size:9px">↺</button>
+    </div>
+  </div>
+  <canvas id="cv"></canvas>
+  <div id="scaleInfo">Scale: 11 px = 1 ft</div>
+  <div id="coordInfo">— ft, — ft</div>
+</main>
+
+<!-- ═══ RIGHT PANEL ═══ -->
+<aside class="rpanel" style="width:310px">
+
+  <!-- Tab bar -->
+  <div class="rptabs">
+    <button class="rptab act" id="tab-zone"   onclick="switchTab('zone')">Zone</button>
+    <button class="rptab"     id="tab-image"  onclick="switchTab('image')">📐 Image</button>
+    <button class="rptab"     id="tab-ai"     onclick="switchTab('ai')">✦ AI</button>
+    <button class="rptab"     id="tab-chat"   onclick="switchTab('chat')">💬 Ask</button>
+  </div>
+
+  <!-- ══ TAB: Zone Inspector ══ -->
+  <div class="rptabcontent act" id="tc-zone" style="overflow-y:auto">
+    <div id="rphdr" style="padding:14px 16px 10px;background:var(--bg1);border-bottom:1px solid var(--bd);text-align:center;flex-shrink:0">
+      <h3 style="font-family:'Playfair Display',serif;font-size:14px;color:var(--gold);margin-bottom:3px">Vaastu Zone Inspector</h3>
+      <p style="font-size:9.5px;color:var(--muted);letter-spacing:1.5px">CLICK A ZONE TO EXPLORE</p>
+    </div>
+    <div id="zmsg" style="display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;padding:20px 14px;text-align:center;color:var(--dim)">
+      <svg width="72" height="72" viewBox="0 0 72 72" fill="none" style="opacity:.3;margin-bottom:10px">
+        <circle cx="36" cy="36" r="34" stroke="#2a3650" stroke-width="1.2"/>
+        <circle cx="36" cy="36" r="5" fill="#d4a843" opacity=".5"/>
+        <polygon points="36,3 39,18 36,14 33,18" fill="#d4a843"/>
+        <polygon points="36,69 39,54 36,58 33,54" fill="#4a5568"/>
+        <line x1="36" y1="3" x2="36" y2="69" stroke="#2a3650" stroke-width=".6"/>
+        <line x1="3" y1="36" x2="69" y2="36" stroke="#2a3650" stroke-width=".6"/>
+        <text x="36" y="10.5" text-anchor="middle" fill="#d4a843" font-size="7" font-family="Inter" font-weight="600">N</text>
+        <text x="36" y="67" text-anchor="middle" fill="#4a5568" font-size="7" font-family="Inter">S</text>
+        <text x="67" y="39" text-anchor="middle" fill="#4a5568" font-size="7" font-family="Inter">E</text>
+        <text x="5" y="39" text-anchor="middle" fill="#4a5568" font-size="7" font-family="Inter">W</text>
+      </svg>
+      <p style="font-size:10.5px;line-height:1.65">Enable a Vaastu layer then click inside any coloured zone on the floor plan</p>
+    </div>
+    <div id="zcard" style="padding:14px;display:none"></div>
+  </div>
+
+  <!-- ══ TAB: Image Upload & Overlay ══ -->
+  <div class="rptabcontent" id="tc-image" style="overflow-y:auto">
+    <div style="padding:12px 12px 0;flex-shrink:0">
+      <div style="font-size:9px;font-weight:700;color:var(--gold);letter-spacing:2px;text-transform:uppercase;margin-bottom:8px">Upload Floor Plan</div>
+      <div id="imgDropZone" onclick="document.getElementById('imgFileIn').click()">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#d4a843" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+        <p>Drag &amp; drop your floor plan photo<br>or <span>click to browse</span></p>
+        <p style="font-size:8.5px;margin-top:5px;color:var(--dim)">JPG · PNG · WEBP · PDF</p>
+        <input type="file" id="imgFileIn" accept="image/*" style="display:none" onchange="handleImgFile(this.files[0])">
+      </div>
+    </div>
+    <div id="imgThumb">
+      <img id="imgPreview" src="" alt="Floor plan">
+      <div id="imgThumbBar">
+        <button class="ithbtn" onclick="removeImg()">✕ Remove</button>
+        <button class="ithbtn" onclick="toggleImgOnCanvas()">⊡ Toggle Overlay</button>
+        <button class="ithbtn gold" onclick="runAIAnalysis()">✦ Analyse</button>
+      </div>
+    </div>
+    <div style="padding:10px 12px;flex-shrink:0">
+      <div style="font-size:9px;font-weight:700;color:var(--gold);letter-spacing:2px;text-transform:uppercase;margin-bottom:8px">Overlay Controls</div>
+      <div style="background:var(--bg1);border:1px solid var(--bd);border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <label style="font-size:10px;color:var(--muted);width:70px">Opacity</label>
+          <input type="range" id="imgOpSlider" min="5" max="100" value="45" style="flex:1;accent-color:var(--gold)" oninput="updateImgOpacity(this.value)">
+          <span id="imgOpVal" style="font-size:10px;color:var(--txt);width:32px;text-align:right">45%</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <label style="font-size:10px;color:var(--muted);width:70px">Scale</label>
+          <input type="range" id="imgScaleSlider" min="30" max="200" value="100" style="flex:1;accent-color:var(--gold)" oninput="updateImgScale(this.value)">
+          <span id="imgScaleVal" style="font-size:10px;color:var(--txt);width:32px;text-align:right">100%</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <label style="font-size:10px;color:var(--muted);width:70px">Extra Rot</label>
+          <input type="range" id="imgRotSlider" min="-180" max="180" value="0" style="flex:1;accent-color:var(--teal)" oninput="updateImgRot(this.value)">
+          <span id="imgRotVal" style="font-size:10px;color:var(--teal);width:32px;text-align:right">0°</span>
+        </div>
+        <!-- Lock to Vaastu rotation toggle -->
+        <div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid var(--bd)">
+          <div style="flex:1">
+            <div style="font-size:10px;color:var(--txt)">Rotate with Vaastu</div>
+            <div style="font-size:8.5px;color:var(--muted)">Image follows overlay rotation</div>
+          </div>
+          <div id="lockToggle" onclick="toggleLockToVaastu()" style="width:36px;height:20px;border-radius:10px;background:var(--gold);cursor:pointer;position:relative;transition:background .2s;flex-shrink:0">
+            <div id="lockKnob" style="width:16px;height:16px;border-radius:50%;background:white;position:absolute;top:2px;right:2px;transition:right .2s"></div>
+          </div>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="ithbtn" style="font-size:9.5px" onclick="imgNudge(-5,0)">◀</button>
+          <button class="ithbtn" style="font-size:9.5px" onclick="imgNudge(5,0)">▶</button>
+          <button class="ithbtn" style="font-size:9.5px" onclick="imgNudge(0,-5)">▲</button>
+          <button class="ithbtn" style="font-size:9.5px" onclick="imgNudge(0,5)">▼</button>
+          <button class="ithbtn" style="font-size:9.5px;flex:2" onclick="imgCenter()">⊡ Center</button>
+        </div>
+      </div>
+    </div>
+    <div style="padding:0 12px 12px;font-size:9.5px;color:var(--dim);line-height:1.65">
+      <b style="color:var(--muted)">Tip:</b> Upload your actual floor plan photo. The image overlays on the canvas so you can align it with the Vaastu zones. Use <b style="color:var(--gold)">✦ Analyse</b> to get AI Vaastu feedback.
+    </div>
+  </div>
+
+  <!-- ══ TAB: AI Analysis ══ -->
+  <div class="rptabcontent" id="tc-ai" style="overflow:hidden">
+    <div style="padding:10px 12px 6px;border-bottom:1px solid var(--bd);flex-shrink:0;display:flex;align-items:center;justify-content:space-between">
+      <div style="font-size:9px;font-weight:700;color:var(--gold);letter-spacing:2px;text-transform:uppercase">AI Vaastu Analysis</div>
+      <button class="ithbtn gold" style="width:auto;padding:4px 10px;font-size:9px" onclick="runAIAnalysis()">✦ Run Analysis</button>
+    </div>
+    <div id="aiPanel">
+      <div class="ai-idle">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#d4a843" stroke-width="1.2"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z"/><path d="m9 12 2 2 4-4"/><path d="M12 6v2m0 8v2M6 12h2m8 0h2"/></svg>
+        <p>Upload a floor plan image and click <b style="color:var(--gold)">✦ Run Analysis</b> — or draw your plan and analyse the current Vaastu layout. AI compares against multiple Vaastu Shastra traditions.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ TAB: Ask AI (Chat) ══ -->
+  <div class="rptabcontent" id="tc-chat">
+    <div id="suggestRow">
+      <button class="qchip" onclick="askQ(this)">Best kitchen direction?</button>
+      <button class="qchip" onclick="askQ(this)">Master bedroom Vastu?</button>
+      <button class="qchip" onclick="askQ(this)">Pooja room placement</button>
+      <button class="qchip" onclick="askQ(this)">Main door facing south</button>
+      <button class="qchip" onclick="askQ(this)">Toilet in NE corner</button>
+      <button class="qchip" onclick="askQ(this)">Brahmasthan rules</button>
+    </div>
+    <div id="chatMsgs">
+      <div class="cmsg bot">
+        <b style="color:var(--gold)">Vaastu AI Assistant</b><br>
+        Ask me anything about Vaastu Shastra — room placements, remedies, directions, elements, or upload your floor plan for personalised advice. I compare answers from multiple leading Vaastu sources.
+      </div>
+    </div>
+    <div id="chatInput">
+      <textarea id="chatTxt" placeholder="Ask about Vaastu Shastra…" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat()}"></textarea>
+      <button id="chatSend" onclick="sendChat()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#09100f" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+      </button>
+    </div>
+  </div>
+
+</aside>
+
+<!-- Image overlay controls bar on canvas -->
+<div id="imgOverlayBar">
+  <label>Opacity</label>
+  <input type="range" id="imgOpacity" min="5" max="100" value="45" oninput="updateImgOpacity(this.value)">
+  <button id="imgBlendBtn" onclick="toggleImgOnCanvas()">Hide</button>
+  <button id="imgRemoveBtn" onclick="removeImg()">Remove</button>
+</div>
+
+</div><!-- #body -->
+
+<!-- ═══ COMPASS RULER BAR ═══ -->
+<div id="compassWrap">
+  <div id="compassLabel">◈ VAASTU COMPASS  0° → 360°  · Drag to rotate overlay</div>
+  <div id="compassAngle">— °  |  —</div>
+  <canvas id="compassBar"></canvas>
+</div>
+
+</div><!-- #app -->
+
+<script>
+// ═══════════════════════════════════════════════════════
+// 16-ZONE VAASTU DATA
+// Canvas angle convention: East=0°, clockwise positive
+// N is "up" on screen = 270° in canvas math
+// Zones ordered E→SE→S→SW→W→NW→N→NE going clockwise
+// ═══════════════════════════════════════════════════════
+const Z16 = [
+  // id  dir       abbr  canvasAngle  devta            elem          energy         color fill               border      attribute            room                   dos                                                                     donts
+  [0,  'East',          'E',    0,   'Surya',         'Fire·Light', 'Vitality',    'rgba(251,146,60,.2)',   '#fb923c', 'Urja (Energy)',      'Living Room / Entry', ['Main entrance ideal','East-facing windows','Indoor plants/fountain'],['No toilet facing east','No heavy pillar east','Avoid blocking sun']                                   ],
+  [1,  'East-SE',       'ESE', 22.5, 'Jayant',        'Fire',       'Victory',     'rgba(239,68,68,.16)',   '#f87171', 'Jaya (Success)',     'Office / Work Area',  ['Career & achievement space','Display trophies','Keep illuminated'],    ['No water bodies here','Avoid blue dominance','No clutter']                                        ],
+  [2,  'South-East',    'SE',  45,   'Agni',          'Fire',       'Transform.',  'rgba(249,115,22,.22)',  '#f97316', 'Prana (Life Force)', 'Kitchen',             ['Kitchen & stove SE corner','Fire elements welcome','Digestive health'],['No water storage','No bedroom here','Avoid north-facing cooking']                                  ],
+  [3,  'South-SE',      'SSE', 67.5, 'Vitatha',       'Fire·Earth', 'Purification','rgba(234,88,12,.15)',   '#ea580c', 'Shuddhi (Purity)',   'Utility / Laundry',  ['Utility & laundry room','Cleaning activities','Keep dry'],             ['No bedroom','No water tank','No heavy metal']                                                     ],
+  [4,  'South',         'S',   90,   'Yama',          'Earth',      'Stability',   'rgba(16,185,129,.17)',  '#10b981', 'Bhay (Protection)', 'Master Bedroom',      ['Master bedroom ideal','Heavy furniture ok','Sleep head to south'],     ['No main entrance south','No open south walls','Avoid empty south']                               ],
+  [5,  'South-SW',      'SSW', 112.5,'Bhringraj',     'Earth',      'Endurance',   'rgba(5,150,105,.15)',   '#059669', 'Mrityu (Endurance)','Storage / Basement',  ['Heavy storage ideal','Grain/food store','Keep filled'],               ['No toilet here','No water bodies','No light activities']                                          ],
+  [6,  'South-West',    'SW',  135,  'Pitru',         'Earth',      'Ancestry',    'rgba(212,170,8,.2)',    '#d4aa08', 'Ayu (Longevity)',   'Master Bed / Safe',   ['Elders room','Heavy permanent structures','Locker / safe ideal'],     ['No main entrance','No open pit/well','Do not leave empty']                                       ],
+  [7,  'West-SW',       'WSW', 157.5,'Sugreev',       'Earth·Air',  'Attachment',  'rgba(180,83,9,.15)',    '#b45309', 'Moh (Bonding)',     'Bedroom / Study',     ['Children or guest room','Library works well','Relationship bonding'],  ['No fire elements','No extreme lighting','No underground construction']                            ],
+  [8,  'West',          'W',   180,  'Varuna',        'Air·Water',  'Flow',        'rgba(14,165,233,.17)',  '#0ea5e9', 'Labh (Gain)',       'Dining Room',         ['Dining room ideal','Business dealings','Water features ok'],           ['No bedroom west-only','No heavy construction west','No fire colors dominant']                    ],
+  [9,  'West-NW',       'WNW', 202.5,'Pushpadanta',   'Air',        'Detachment',  'rgba(56,189,248,.15)',  '#38bdf8', 'Palan (Support)',   'Guest Room / Garage', ['Guest rooms ideal','Garage / parking','Rarely-used storage'],         ['No master bedroom','No permanent valuables','Avoid fixed residence']                              ],
+  [10, 'North-West',    'NW',  225,  'Vayu (Marut)',  'Air',        'Movement',    'rgba(129,140,248,.17)', '#818cf8', 'Chikitsa (Healing)','Guest Bed / Nursery', ['Guest rooms','Nursery for newborns','Good ventilation/airflow'],       ['No fire elements','No heavy storage','No permanent fixture blocking NW']                         ],
+  [11, 'North-NW',      'NNW', 247.5,'Mukhya',        'Air·Water',  'Intellect',   'rgba(99,102,241,.18)',  '#6366f1', 'Buddhi (Wisdom)',   'Home Office / Study', ['Study & office excellent','Keep books','Educational material'],        ['No kitchen','Avoid clutter','No heavy dark objects']                                              ],
+  [12, 'North',         'N',   270,  'Kubera',        'Water',      'Prosperity',  'rgba(59,130,246,.18)',  '#3b82f6', 'Dhan (Wealth)',     'Treasury / Locker',   ['Store valuables','Keep open','Water feature or fountain'],             ['No heavy furniture','No fire element','No blocked north openings']                               ],
+  [13, 'North-NE',      'NNE', 292.5,'Soma',          'Water·Ether','Health',      'rgba(139,92,246,.17)',  '#8b5cf6', 'Swasthya (Health)', 'Bathroom / Wellness', ['Keep clean','Medicinal plants','Meditation nook'],                    ['No kitchen','No heavy storage','No red/fire colours']                                             ],
+  [14, 'North-East',    'NE',  315,  'Ishana',        'Ether/Space','Divine',      'rgba(168,85,247,.18)',  '#a855f7', 'Gyan (Knowledge)', 'Puja Room / Study',   ['Prayer room ideal','Water or crystal','Keep light & open'],           ['No toilet or kitchen','No clutter','No heavy construction']                                      ],
+  [15, 'East-NE',       'ENE', 337.5,'Aditi',         'Ether·Fire', 'Expansion',   'rgba(234,179,8,.15)',   '#eab308', 'Arogya (Wellness)','Gym / Yoga Room',     ['Physical activities','Morning sunlight','Open east windows'],         ['No dark colours','No heavy east walls','No underground tanks']                                    ],
+];
+
+// ═══════════════════════════════════════════════════════
+// SHAPE TEMPLATES  (normalised 0-1)
+// ═══════════════════════════════════════════════════════
+const SHAPES = {
+  rect:   { label:'Rectangle',  verts:(W,H)=>[{x:0,y:0},{x:W,y:0},{x:W,y:H},{x:0,y:H}], hole:null },
+  L:      { label:'L-Shape',    verts:(W,H)=>[{x:0,y:0},{x:W,y:0},{x:W,y:H*.42},{x:W*.42,y:H*.42},{x:W*.42,y:H},{x:0,y:H}], hole:null },
+  U:      { label:'U-Shape',    verts:(W,H)=>[{x:0,y:0},{x:W,y:0},{x:W,y:H},{x:W*.65,y:H},{x:W*.65,y:H*.48},{x:W*.35,y:H*.48},{x:W*.35,y:H},{x:0,y:H}], hole:null },
+  H:      { label:'H-Shape',    verts:(W,H)=>[{x:0,y:0},{x:W*.35,y:0},{x:W*.35,y:H*.38},{x:W*.65,y:H*.38},{x:W*.65,y:0},{x:W,y:0},{x:W,y:H},{x:W*.65,y:H},{x:W*.65,y:H*.62},{x:W*.35,y:H*.62},{x:W*.35,y:H},{x:0,y:H}], hole:null },
+  T:      { label:'T-Shape',    verts:(W,H)=>[{x:0,y:0},{x:W,y:0},{x:W,y:H*.4},{x:W*.65,y:H*.4},{x:W*.65,y:H},{x:W*.35,y:H},{x:W*.35,y:H*.4},{x:0,y:H*.4}], hole:null },
+  C:      { label:'C-Shape',    verts:(W,H)=>[{x:0,y:0},{x:W,y:0},{x:W,y:H*.28},{x:W*.42,y:H*.28},{x:W*.42,y:H*.72},{x:W,y:H*.72},{x:W,y:H},{x:0,y:H}], hole:null },
+  Z:      { label:'Z-Shape',    verts:(W,H)=>[{x:0,y:0},{x:W*.58,y:0},{x:W*.58,y:H*.42},{x:W,y:H*.42},{x:W,y:H},{x:W*.42,y:H},{x:W*.42,y:H*.58},{x:0,y:H*.58}], hole:null },
+  plus:   { label:'+ Shape',    verts:(W,H)=>[{x:W*.33,y:0},{x:W*.67,y:0},{x:W*.67,y:H*.33},{x:W,y:H*.33},{x:W,y:H*.67},{x:W*.67,y:H*.67},{x:W*.67,y:H},{x:W*.33,y:H},{x:W*.33,y:H*.67},{x:0,y:H*.67},{x:0,y:H*.33},{x:W*.33,y:H*.33}], hole:null },
+  court:  { label:'Courtyard',  verts:(W,H)=>[{x:0,y:0},{x:W,y:0},{x:W,y:H},{x:0,y:H}], hole:(W,H)=>[{x:W*.28,y:H*.28},{x:W*.72,y:H*.28},{x:W*.72,y:H*.72},{x:W*.28,y:H*.72}] },
+};
+
+// ═══════════════════════════════════════════════════════
+// APP STATE
+// ═══════════════════════════════════════════════════════
+let S = {
+  shapeId: 'rect',
+  Lft: 40, Bft: 30, scale: 11,
+  verts: [],        // outer polygon vertices in screen coords
+  holeVerts: [],    // courtyard inner hole verts
+  layers: { zones:true, pada:false, devta:false, attr:false, rooms:false, pts16:false, brahma:true },
+  drag: { on:false, type:'', idx:-1, ox:0, oy:0, snapVerts:[] },
+  hovV: -1, hovE: -1, hovZone: -1, selZone: -1,
+  tool: 'sel',
+  snap: false,
+  pan: { on:false, sx:0, sy:0, ox:0, oy:0 },
+  offset: {x:0, y:0},
+  zoom: 1,
+  raf: null,
+  compassAngle: -1,
+  compassX: -1,
+  vaastuRot: 0,           // degrees: rotation offset for all Vaastu layers
+  rotDrag: { on:false, startAngle:0, startRot:0 }, // rotation drag state
+  showRotRing: true,      // show the rotation handle ring on canvas
+};
+
+// ═══════════════════════════════════════════════════════
+// CANVAS
+// ═══════════════════════════════════════════════════════
+const cv = document.getElementById('cv');
+const cx = cv.getContext('2d');
+const carea = document.getElementById('carea');
+
+function resizeCv(){
+  cv.width  = carea.clientWidth;
+  cv.height = carea.clientHeight;
+}
+window.addEventListener('resize', resizeCv);
+resizeCv();
+
+// ═══════════════════════════════════════════════════════
+// SHAPE BUTTON GRID
+// ═══════════════════════════════════════════════════════
+function buildShapeGrid(){
+  const grid = document.getElementById('sgrid');
+  grid.innerHTML = '';
+  Object.entries(SHAPES).forEach(([id,sh])=>{
+    const btn = document.createElement('button');
+    btn.className = 'sbtn' + (id===S.shapeId?' act':'');
+    btn.id = 'sb-'+id;
+    // mini preview canvas
+    const ic = document.createElement('canvas');
+    ic.width=28; ic.height=28;
+    const gc = ic.getContext('2d');
+    gc.strokeStyle = id===S.shapeId ? '#d4a843' : '#4a5568';
+    gc.lineWidth = 1.4;
+    drawShapeIcon(gc, id, 28, 28);
+    btn.appendChild(ic);
+    btn.appendChild(document.createTextNode(sh.label));
+    btn.onclick = ()=>{ selectShape(id); };
+    grid.appendChild(btn);
+  });
+}
+
+function drawShapeIcon(gc, id, W, H){
+  const p=2;
+  const def = SHAPES[id];
+  const vs = def.verts(W-p*2, H-p*2).map(v=>({x:v.x+p,y:v.y+p}));
+  gc.beginPath();
+  vs.forEach((v,i)=> i===0?gc.moveTo(v.x,v.y):gc.lineTo(v.x,v.y));
+  gc.closePath();
+  if(def.hole){
+    const hs = def.hole(W-p*2,H-p*2).map(v=>({x:v.x+p,y:v.y+p}));
+    gc.moveTo(hs[0].x,hs[0].y);
+    hs.forEach((v,i)=>{ if(i>0)gc.lineTo(v.x,v.y); });
+    gc.closePath();
+  }
+  gc.stroke();
+}
+
+function selectShape(id){
+  S.shapeId = id;
+  document.querySelectorAll('.sbtn').forEach(b=>b.classList.remove('act'));
+  const btn = document.getElementById('sb-'+id);
+  if(btn) btn.classList.add('act');
+  // re-draw icon in gold
+  const ic = btn.querySelector('canvas');
+  if(ic){
+    const gc = ic.getContext('2d'); gc.clearRect(0,0,28,28);
+    gc.strokeStyle='#d4a843'; gc.lineWidth=1.4;
+    drawShapeIcon(gc,id,28,28);
+  }
+  buildShape();
+}
+
+// ═══════════════════════════════════════════════════════
+// BUILD / APPLY
+// ═══════════════════════════════════════════════════════
+function applyDims(){
+  S.Lft   = Math.max(8, parseFloat(document.getElementById('inL').value)||40);
+  S.Bft   = Math.max(8, parseFloat(document.getElementById('inB').value)||30);
+  S.scale = Math.max(4, Math.min(30, parseFloat(document.getElementById('inScale').value)||11));
+  document.getElementById('scaleInfo').textContent = `Scale: ${S.scale} px = 1 ft`;
+  buildShape();
+}
+
+function buildShape(){
+  const W = S.Lft * S.scale;
+  const H = S.Bft * S.scale;
+  const def = SHAPES[S.shapeId];
+  const raw = def.verts(W, H);
+  const cx0 = cv.width/2 - W/2;
+  const cy0 = cv.height/2 - H/2;
+  S.verts = raw.map(v=>({x: v.x+cx0, y: v.y+cy0}));
+  if(def.hole){
+    const hr = def.hole(W,H);
+    S.holeVerts = hr.map(v=>({x: v.x+cx0, y: v.y+cy0}));
+  } else {
+    S.holeVerts = [];
+  }
+  S.selZone = -1;
+  updateZoneCard(-1);
+}
+
+function resetShape(){ buildShape(); }
+function clearAll(){ S.verts=[]; S.holeVerts=[]; S.selZone=-1; updateZoneCard(-1); }
+
+// ═══════════════════════════════════════════════════════
+// MATH HELPERS
+// ═══════════════════════════════════════════════════════
+function centroid(vs){
+  let A=0,cx=0,cy=0,n=vs.length;
+  for(let i=0;i<n;i++){
+    const j=(i+1)%n;
+    const c = vs[i].x*vs[j].y - vs[j].x*vs[i].y;
+    A+=c; cx+=(vs[i].x+vs[j].x)*c; cy+=(vs[i].y+vs[j].y)*c;
+  }
+  A/=2; cx/=6*A; cy/=6*A;
+  return {x:cx, y:cy, area:Math.abs(A)};
+}
+
+function bbox(vs){
+  let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
+  vs.forEach(v=>{ x0=Math.min(x0,v.x);y0=Math.min(y0,v.y);x1=Math.max(x1,v.x);y1=Math.max(y1,v.y); });
+  return {x0,y0,x1,y1,w:x1-x0,h:y1-y0};
+}
+
+function pip(px,py,vs){ // point in polygon
+  let inside=false;
+  for(let i=0,j=vs.length-1;i<vs.length;j=i++){
+    const xi=vs[i].x,yi=vs[i].y,xj=vs[j].x,yj=vs[j].y;
+    if(((yi>py)!==(yj>py))&&(px<(xj-xi)*(py-yi)/(yj-yi)+xi)) inside=!inside;
+  }
+  return inside;
+}
+
+function dst(ax,ay,bx,by){ return Math.sqrt((ax-bx)**2+(ay-by)**2); }
+
+function edgeMid(vs){
+  return vs.map((v,i)=>{
+    const j=(i+1)%vs.length;
+    return {x:(v.x+vs[j].x)/2, y:(v.y+vs[j].y)/2, i, j};
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+// ZONE HIT
+// canvas: East=0°, angles increase clockwise
+// ═══════════════════════════════════════════════════════
+function zoneAt(px,py,cen){
+  if(!pip(px,py,S.verts)) return -1;
+  let ang = Math.atan2(py-cen.y, px-cen.x)*180/Math.PI;
+  if(ang<0) ang+=360;
+  // subtract rotation so we test against the rotated zone positions
+  ang = ((ang - S.vaastuRot) % 360 + 360) % 360;
+  for(let i=0;i<Z16.length;i++){
+    const za = Z16[i][3];
+    let s=za-11.25, e=za+11.25;
+    if(s<0)s+=360; if(e>=360)e-=360;
+    if(s>e){ if(ang>=s||ang<e) return i; }
+    else    { if(ang>=s&&ang<e) return i; }
+  }
+  return -1;
+}
+
+// ═══════════════════════════════════════════════════════
+// LAYERS
+// ═══════════════════════════════════════════════════════
+function toggleLayer(id){
+  S.layers[id] = !S.layers[id];
+  const el = document.getElementById('ck-'+id);
+  el.classList.toggle('on', S.layers[id]);
+  el.innerHTML = S.layers[id]
+    ? `<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#09100f" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg>`
+    : '';
+}
+
+// ═══════════════════════════════════════════════════════
+// TOOL & SNAP
+// ═══════════════════════════════════════════════════════
+function setTool(t){
+  S.tool=t;
+  document.querySelectorAll('.tbtn[id^="t-"]').forEach(b=>b.classList.remove('act'));
+  const btn=document.getElementById('t-'+t);
+  if(btn) btn.classList.add('act');
+  cv.style.cursor = t==='pan'?'grab': t==='rot'?'crosshair':'crosshair';
+}
+
+function resetVaastuRot(){
+  S.vaastuRot=0;
+  document.getElementById('rotReadout').textContent='0°';
+  // also sync compass bar needle to 0
+  const bar=document.getElementById('compassBar');
+  S.compassAngle=0; S.compassX=0;
+}
+
+function toggleSnap(){
+  S.snap=!S.snap;
+  document.getElementById('t-snap').classList.toggle('act',S.snap);
+}
+
+function snapPt(x,y){
+  if(!S.snap) return {x,y};
+  const g=S.scale; // snap to 1ft grid
+  return {x:Math.round(x/g)*g, y:Math.round(y/g)*g};
+}
+
+function zoomBy(f){
+  S.scale = Math.max(4, Math.min(30, Math.round(S.scale*f)));
+  document.getElementById('inScale').value = S.scale;
+  document.getElementById('scaleInfo').textContent = `Scale: ${S.scale} px = 1 ft`;
+}
+
+function fitToView(){
+  if(S.verts.length<3) return;
+  const bb=bbox(S.verts);
+  const dx=cv.width/2-(bb.x0+bb.w/2);
+  const dy=cv.height/2-(bb.y0+bb.h/2);
+  S.verts=S.verts.map(v=>({x:v.x+dx,y:v.y+dy}));
+  if(S.holeVerts.length) S.holeVerts=S.holeVerts.map(v=>({x:v.x+dx,y:v.y+dy}));
+}
+
+// ═══════════════════════════════════════════════════════
+// MOUSE
+// ═══════════════════════════════════════════════════════
+const VRAD=8, ERAD=7;
+
+function mxy(e){
+  const r=cv.getBoundingClientRect();
+  return {x:e.clientX-r.left, y:e.clientY-r.top};
+}
+
+cv.addEventListener('mousedown', e=>{
+  const {x,y}=mxy(e);
+  if(S.tool==='pan'){ S.pan={on:true,sx:x,sy:y,ox:0,oy:0}; cv.style.cursor='grabbing'; return; }
+
+  // ── Rotation drag ──
+  // Activate if: tool is 'rot', OR mouse is near the rotation ring
+  if(S.verts.length>2){
+    const cen=centroid(S.verts);
+    const bb2=bbox(S.verts);
+    const ringR = Math.min(bb2.w,bb2.h)*0.52;
+    const d=dst(x,y,cen.x,cen.y);
+    const onRing = Math.abs(d-ringR)<14;
+
+    if(S.tool==='rot' || onRing){
+      const startAngle=Math.atan2(y-cen.y,x-cen.x)*180/Math.PI;
+      S.rotDrag={on:true, startAngle, startRot:S.vaastuRot};
+      cv.style.cursor='grabbing';
+      return;
+    }
+  }
+
+  // check vertex handles
+  for(let i=0;i<S.verts.length;i++){
+    if(dst(x,y,S.verts[i].x,S.verts[i].y)<VRAD+4){
+      S.drag={on:true,type:'v',idx:i,ox:x,oy:y,snapVerts:S.verts.map(v=>({...v}))};
+      return;
+    }
+  }
+  // check edge midpoint handles
+  const mids=edgeMid(S.verts);
+  for(let i=0;i<mids.length;i++){
+    if(dst(x,y,mids[i].x,mids[i].y)<ERAD+4){
+      S.drag={on:true,type:'e',idx:i,ox:x,oy:y,snapVerts:S.verts.map(v=>({...v}))};
+      return;
+    }
+  }
+});
+
+cv.addEventListener('mousemove', e=>{
+  const {x,y}=mxy(e);
+  document.getElementById('coordInfo').textContent=
+    `${(x/S.scale).toFixed(1)} ft,  ${(y/S.scale).toFixed(1)} ft`;
+
+  // Update compass needle based on angle from centroid
+  if(S.verts.length>2){
+    const cen=centroid(S.verts);
+    let ang=Math.atan2(y-cen.y, x-cen.x)*180/Math.PI;
+    if(ang<0) ang+=360;
+    S.compassAngle=ang;
+    // compass bar position: ang/360 * barWidth
+    const bar=document.getElementById('compassBar');
+    S.compassX=(ang/360)*bar.width;
+    // find which zone
+    let zoneName='—';
+    for(let i=0;i<Z16.length;i++){
+      const za=Z16[i][3]; let s=za-11.25,e2=za+11.25;
+      if(s<0)s+=360; if(e2>=360)e2-=360;
+      let hit=s>e2?(ang>=s||ang<e2):(ang>=s&&ang<e2);
+      if(hit){zoneName=Z16[i][1]+' · '+Z16[i][4];break;}
+    }
+    document.getElementById('compassAngle').textContent=
+      `${ang.toFixed(1)}°  |  ${zoneName}`;
+  }
+
+  // ── Rotation drag active ──
+  if(S.rotDrag.on){
+    if(S.verts.length>2){
+      const cen=centroid(S.verts);
+      const curAngle=Math.atan2(y-cen.y,x-cen.x)*180/Math.PI;
+      let delta=curAngle-S.rotDrag.startAngle;
+      let newRot=(S.rotDrag.startRot+delta)%360;
+      if(newRot<0) newRot+=360;
+      S.vaastuRot=newRot;
+      document.getElementById('rotReadout').textContent=newRot.toFixed(1)+'°';
+      // sync compass needle to current rotation
+      const bar=document.getElementById('compassBar');
+      S.compassAngle=newRot;
+      S.compassX=(newRot/360)*bar.width;
+      // update zone name in compass
+      let zoneName='—';
+      for(let i=0;i<Z16.length;i++){
+        const za=(Z16[i][3]+newRot)%360;
+        let s=za-11.25,e2=za+11.25;
+        if(s<0)s+=360; if(e2>=360)e2-=360;
+        // show zone under north (270° in canvas = N)
+      }
+      document.getElementById('compassAngle').textContent=`${newRot.toFixed(1)}°  |  Vaastu Rotation`;
+    }
+    cv.style.cursor='grabbing';
+    return;
+  }
+
+  // PAN
+  if(S.pan.on){
+    const dx=x-S.pan.sx, dy=y-S.pan.sy;
+    S.verts=S.verts.map((v,i)=>({x:S.drag.snapVerts?S.drag.snapVerts[i].x+dx:v.x, y:S.drag.snapVerts?S.drag.snapVerts[i].y+dy:v.y}));
+    return;
+  }
+  if(S.tool==='pan') return;
+
+  if(S.drag.on){
+    const sp = snapPt(x,y);
+    const dx=sp.x-S.drag.ox, dy=sp.y-S.drag.oy;
+
+    if(S.drag.type==='v'){
+      const nv = S.drag.snapVerts.map((v,i)=> i===S.drag.idx ? {x:v.x+dx,y:v.y+dy} : {...v});
+      const c=centroid(nv);
+      if(c.area>500) S.verts=nv; // prevent collapse
+    }
+    if(S.drag.type==='e'){
+      // push both vertices of the edge perpendicularly
+      const mi=S.drag.idx;
+      const vi=S.verts[mi];
+      const vj=S.verts[(mi+1)%S.verts.length];
+      const ex=vj.x-vi.x, ey=vj.y-vi.y;
+      const len=Math.sqrt(ex*ex+ey*ey)||1;
+      const nx=-ey/len, ny=ex/len; // perpendicular inward
+      const proj = dx*nx + dy*ny;
+      const nv = S.drag.snapVerts.map((v,i)=>{
+        if(i===S.drag.idx||(i===(S.drag.idx+1)%S.verts.length)){
+          return {x:v.x+nx*proj, y:v.y+ny*proj};
+        }
+        return {...v};
+      });
+      const c=centroid(nv);
+      if(c.area>500) S.verts=nv;
+    }
+    cv.style.cursor='grabbing';
+    return;
+  }
+
+  // hover checks
+  let hv=-1, he=-1, hz=-1, onRing=false;
+  for(let i=0;i<S.verts.length;i++){
+    if(dst(x,y,S.verts[i].x,S.verts[i].y)<VRAD+4){ hv=i; break; }
+  }
+  if(hv<0){
+    const mids=edgeMid(S.verts);
+    for(let i=0;i<mids.length;i++){
+      if(dst(x,y,mids[i].x,mids[i].y)<ERAD+4){ he=i; break; }
+    }
+  }
+  if(hv<0&&he<0&&S.verts.length>2){
+    const cen=centroid(S.verts);
+    const bb2=bbox(S.verts);
+    const ringR=Math.min(bb2.w,bb2.h)*0.52;
+    onRing = Math.abs(dst(x,y,cen.x,cen.y)-ringR)<14;
+    hz=zoneAt(x,y,cen);
+  }
+  S.hovV=hv; S.hovE=he; S.hovZone=hz;
+  if(S.tool==='rot') cv.style.cursor='crosshair';
+  else if(hv>=0||he>=0) cv.style.cursor='grab';
+  else if(onRing) cv.style.cursor='grab';
+  else if(hz>=0) cv.style.cursor='pointer';
+  else cv.style.cursor='crosshair';
+});
+
+cv.addEventListener('mouseup', e=>{
+  if(S.pan.on){ S.pan.on=false; cv.style.cursor='grab'; return; }
+  if(S.rotDrag.on){ S.rotDrag.on=false; cv.style.cursor= S.tool==='rot'?'crosshair':'crosshair'; return; }
+  if(S.drag.on){
+    S.drag.on=false;
+    if(S.tool==='pan') cv.style.cursor='grab';
+    return;
+  }
+  // click zone (only in sel tool)
+  if(S.tool==='sel'){
+    const {x,y}=mxy(e);
+    if(S.verts.length>2){
+      const cen=centroid(S.verts);
+      const z=zoneAt(x,y,cen);
+      if(z>=0){ S.selZone=z; updateZoneCard(z); }
+    }
+  }
+});
+
+cv.addEventListener('mouseleave', ()=>{
+  S.drag.on=false; S.pan.on=false; S.rotDrag.on=false;
+  S.hovV=-1; S.hovE=-1; S.hovZone=-1;
+  S.compassAngle=-1; S.compassX=-1;
+  document.getElementById('compassAngle').textContent='— °  |  —';
+});
+
+cv.addEventListener('wheel', e=>{
+  e.preventDefault();
+  const f = e.deltaY<0?1.1:0.91;
+  S.scale = Math.max(4, Math.min(30, +(S.scale*f).toFixed(1)));
+  document.getElementById('inScale').value = S.scale;
+  document.getElementById('scaleInfo').textContent = `Scale: ${S.scale} px = 1 ft`;
+},{passive:false});
+
+// ═══════════════════════════════════════════════════════
+// RENDER LOOP
+// ═══════════════════════════════════════════════════════
+function render(){
+  S.raf=requestAnimationFrame(render);
+  cx.clearRect(0,0,cv.width,cv.height);
+
+  drawGrid();
+
+  drawCompassBar(); // always redraw compass for live needle
+
+  // keep compass needle synced to vaastuRot when not hovering
+  if(S.compassAngle<0){
+    S.compassAngle = S.vaastuRot;
+    S.compassX     = (S.vaastuRot/360)*cbEl.width;
+  }
+
+  if(S.verts.length<3) return;
+
+  const cen = centroid(S.verts);
+  const bb  = bbox(S.verts);
+
+  if(S.layers.zones)    drawZones(cen,bb);
+  if(S.layers.pada)     drawPada(bb);
+  drawImgOverlay();
+  drawShape(cen);
+  if(S.layers.pts16)    draw16pts(cen,bb);
+  if(S.layers.brahma)   drawBrahma(cen,bb);
+  if(S.layers.devta)    drawDevta(cen,bb);
+  if(S.layers.attr)     drawAttr(cen,bb);
+  if(S.layers.rooms)    drawRooms(cen,bb);
+  drawHandles();
+  drawRotRing(cen,bb);
+  drawDims();
+}
+
+// ─── architect graph paper grid ───
+function drawGrid(){
+  const W=cv.width, H=cv.height, g=S.scale, G=g*5;
+  cx.save();
+  // fine grid
+  cx.strokeStyle='rgba(80,130,200,.055)'; cx.lineWidth=.5;
+  for(let x=0;x<W;x+=g){ cx.beginPath();cx.moveTo(x,0);cx.lineTo(x,H);cx.stroke(); }
+  for(let y=0;y<H;y+=g){ cx.beginPath();cx.moveTo(0,y);cx.lineTo(W,y);cx.stroke(); }
+  // major grid
+  cx.strokeStyle='rgba(80,130,200,.12)'; cx.lineWidth=.8;
+  for(let x=0;x<W;x+=G){ cx.beginPath();cx.moveTo(x,0);cx.lineTo(x,H);cx.stroke(); }
+  for(let y=0;y<H;y+=G){ cx.beginPath();cx.moveTo(0,y);cx.lineTo(W,y);cx.stroke(); }
+  // dots at intersections
+  cx.fillStyle='rgba(80,130,200,.09)';
+  for(let x=0;x<W;x+=G) for(let y=0;y<H;y+=G){
+    cx.beginPath();cx.arc(x,y,1.2,0,Math.PI*2);cx.fill();
+  }
+  cx.restore();
+}
+
+// ─── zone wedges ───
+function drawZones(cen,bb){
+  const R=Math.max(bb.w,bb.h)*1.1;
+  const rot=S.vaastuRot*Math.PI/180; // rotation in radians
+  cx.save();
+  cx.beginPath();
+  S.verts.forEach((v,i)=>i===0?cx.moveTo(v.x,v.y):cx.lineTo(v.x,v.y));
+  cx.closePath(); cx.clip();
+
+  Z16.forEach((z,i)=>{
+    const baseAngle = z[3]*Math.PI/180 + rot;
+    const a0=baseAngle-11.25*Math.PI/180, a1=baseAngle+11.25*Math.PI/180;
+    const sel=S.selZone===i, hov=S.hovZone===i;
+
+    cx.beginPath();
+    cx.moveTo(cen.x,cen.y);
+    cx.arc(cen.x,cen.y,R,a0,a1);
+    cx.closePath();
+
+    let fill=z[7];
+    if(sel)  fill=fill.replace(/[\d.]+\)$/,'0.42)');
+    else if(hov) fill=fill.replace(/[\d.]+\)$/,'0.3)');
+    cx.fillStyle=fill; cx.fill();
+
+    // divider line
+    cx.beginPath();
+    cx.moveTo(cen.x,cen.y);
+    cx.lineTo(cen.x+R*Math.cos(a0), cen.y+R*Math.sin(a0));
+    cx.strokeStyle=z[8]+'44'; cx.lineWidth=.8;
+    cx.setLineDash([4,4]); cx.stroke(); cx.setLineDash([]);
+  });
+  cx.restore();
+
+  // direction abbreviations
+  Z16.forEach(z=>{
+    const r=Math.min(bb.w,bb.h)*.47;
+    const ar=z[3]*Math.PI/180+rot;
+    const lx=cen.x+r*Math.cos(ar), ly=cen.y+r*Math.sin(ar);
+    if(!pip(lx,ly,S.verts)) return;
+    cx.save();
+    cx.fillStyle=z[8]; cx.font=`bold ${z[2].length>2?8:10}px Inter`;
+    cx.textAlign='center'; cx.textBaseline='middle'; cx.globalAlpha=.9;
+    cx.fillText(z[2],lx,ly);
+    cx.restore();
+  });
+}
+
+// ─── 9×9 pada grid ───
+function drawPada(bb){
+  cx.save();
+  cx.beginPath();
+  S.verts.forEach((v,i)=>i===0?cx.moveTo(v.x,v.y):cx.lineTo(v.x,v.y));
+  cx.closePath(); cx.clip();
+  const cw=bb.w/9, ch=bb.h/9;
+  cx.strokeStyle='rgba(212,168,67,.22)'; cx.lineWidth=.65;
+  for(let i=0;i<=9;i++){
+    cx.beginPath();cx.moveTo(bb.x0+i*cw,bb.y0);cx.lineTo(bb.x0+i*cw,bb.y1);cx.stroke();
+    cx.beginPath();cx.moveTo(bb.x0,bb.y0+i*ch);cx.lineTo(bb.x1,bb.y0+i*ch);cx.stroke();
+  }
+  cx.fillStyle='rgba(212,168,67,.12)'; cx.font='6.5px Inter'; cx.textAlign='center'; cx.textBaseline='middle';
+  for(let r=0;r<9;r++) for(let c=0;c<9;c++){
+    cx.fillText(r*9+c+1, bb.x0+(c+.5)*cw, bb.y0+(r+.5)*ch);
+  }
+  cx.restore();
+}
+
+// ─── floor shape outline ───
+function drawShape(){
+  cx.save();
+  cx.beginPath();
+  S.verts.forEach((v,i)=>i===0?cx.moveTo(v.x,v.y):cx.lineTo(v.x,v.y));
+  cx.closePath();
+  if(S.holeVerts.length){
+    cx.moveTo(S.holeVerts[0].x,S.holeVerts[0].y);
+    S.holeVerts.forEach((v,i)=>{ if(i>0)cx.lineTo(v.x,v.y); });
+    cx.closePath();
+  }
+  // floor fill
+  cx.fillStyle='rgba(200,185,150,.06)';
+  cx.fill('evenodd');
+  // outer wall thick
+  cx.strokeStyle='#7a6a4a'; cx.lineWidth=3.5; cx.stroke();
+  // inner double line
+  cx.strokeStyle='rgba(212,168,67,.35)'; cx.lineWidth=1;
+  cx.setLineDash([5,3]); cx.stroke(); cx.setLineDash([]);
+  cx.restore();
+}
+
+// ─── 16 radial wall-point markers ───
+function draw16pts(cen,bb){
+  const R=Math.max(bb.w,bb.h)*.72;
+  const rot=S.vaastuRot*Math.PI/180;
+  Z16.forEach((z,i)=>{
+    const ar=z[3]*Math.PI/180+rot;
+    let px=cen.x, py=cen.y;
+    let found=false;
+    for(let r=0;r<=R;r+=2){
+      const tx=cen.x+r*Math.cos(ar), ty=cen.y+r*Math.sin(ar);
+      if(!pip(tx,ty,S.verts)){ px=tx;py=ty;found=true;break; }
+    }
+    if(!found) return;
+    cx.save();
+    cx.beginPath(); cx.arc(px,py,4,0,Math.PI*2);
+    cx.fillStyle=z[8]; cx.fill();
+    cx.strokeStyle='#0c1018'; cx.lineWidth=1.2; cx.stroke();
+    const ox=12, lx=cen.x+(R+ox)*Math.cos(ar), ly=cen.y+(R+ox)*Math.sin(ar);
+    if(pip(lx,ly,S.verts)) { cx.restore(); return; }
+    cx.font=`bold 8px Inter`; cx.fillStyle=z[8]; cx.textAlign='center'; cx.textBaseline='middle';
+    cx.fillText(z[2], lx, ly);
+    cx.restore();
+  });
+}
+
+// ─── brahmasthan ───
+function drawBrahma(cen,bb){
+  const r=Math.min(bb.w,bb.h)*.11;
+  cx.save();
+  const g=cx.createRadialGradient(cen.x,cen.y,0,cen.x,cen.y,r*3);
+  g.addColorStop(0,'rgba(212,168,67,.38)');
+  g.addColorStop(.5,'rgba(212,168,67,.1)');
+  g.addColorStop(1,'rgba(212,168,67,0)');
+  cx.fillStyle=g; cx.beginPath(); cx.arc(cen.x,cen.y,r*3,0,Math.PI*2); cx.fill();
+  // ring
+  cx.strokeStyle='rgba(212,168,67,.7)'; cx.lineWidth=1.5;
+  cx.beginPath(); cx.arc(cen.x,cen.y,r,0,Math.PI*2); cx.stroke();
+  // cross hairs
+  cx.strokeStyle='rgba(212,168,67,.45)'; cx.lineWidth=.8; cx.setLineDash([3,3]);
+  cx.beginPath();cx.moveTo(cen.x-r*1.8,cen.y);cx.lineTo(cen.x+r*1.8,cen.y);cx.stroke();
+  cx.beginPath();cx.moveTo(cen.x,cen.y-r*1.8);cx.lineTo(cen.x,cen.y+r*1.8);cx.stroke();
+  cx.setLineDash([]);
+  // centre label
+  cx.font='bold 9.5px Inter'; cx.fillStyle='rgba(212,168,67,.92)';
+  cx.textAlign='center'; cx.textBaseline='middle';
+  cx.fillText('ब्रह्म', cen.x, cen.y-.5);
+  cx.font='7px Inter'; cx.fillStyle='rgba(212,168,67,.55)';
+  cx.fillText('Brahmasthan', cen.x, cen.y+r*.55);
+  cx.restore();
+}
+
+// ─── devta names ───
+function drawDevta(cen,bb){
+  const r=Math.min(bb.w,bb.h)*.33;
+  const rot=S.vaastuRot*Math.PI/180;
+  Z16.forEach(z=>{
+    const ar=z[3]*Math.PI/180+rot;
+    const lx=cen.x+r*Math.cos(ar), ly=cen.y+r*Math.sin(ar);
+    if(!pip(lx,ly,S.verts)) return;
+    cx.save();
+    cx.font='bold 7.5px Inter'; cx.fillStyle=z[8];
+    cx.textAlign='center'; cx.textBaseline='middle'; cx.globalAlpha=.92;
+    cx.fillText(z[4],lx,ly);
+    cx.restore();
+  });
+}
+
+// ─── attribute labels ───
+function drawAttr(cen,bb){
+  const r=Math.min(bb.w,bb.h)*.23;
+  const rot=S.vaastuRot*Math.PI/180;
+  Z16.forEach(z=>{
+    const ar=z[3]*Math.PI/180+rot;
+    const lx=cen.x+r*Math.cos(ar), ly=cen.y+r*Math.sin(ar);
+    if(!pip(lx,ly,S.verts)) return;
+    cx.save();
+    cx.font='6.5px Inter'; cx.fillStyle='rgba(230,220,210,.78)';
+    cx.textAlign='center'; cx.textBaseline='middle';
+    cx.fillText(z[10].split('(')[0].trim(),lx,ly);
+    cx.restore();
+  });
+}
+
+// ─── room recommendation chips ───
+function drawRooms(cen,bb){
+  const r=Math.min(bb.w,bb.h)*.55;
+  const rot=S.vaastuRot*Math.PI/180;
+  Z16.forEach(z=>{
+    const ar=z[3]*Math.PI/180+rot;
+    const lx=cen.x+r*Math.cos(ar), ly=cen.y+r*Math.sin(ar);
+    if(!pip(lx,ly,S.verts)) return;
+    const txt=z[11].split('/')[0].trim();
+    cx.save();
+    cx.font='7px Inter';
+    const tw=cx.measureText(txt).width+9;
+    cx.fillStyle=z[7].replace(/[\d.]+\)$/,'0.65)');
+    cx.strokeStyle=z[8]; cx.lineWidth=.9;
+    cx.beginPath(); roundRect(cx,lx-tw/2,ly-8,tw,16,4); cx.fill(); cx.stroke();
+    cx.fillStyle='rgba(240,235,220,.96)';
+    cx.textAlign='center'; cx.textBaseline='middle';
+    cx.fillText(txt,lx,ly);
+    cx.restore();
+  });
+}
+
+function roundRect(ctx,x,y,w,h,r){
+  ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.arcTo(x+w,y,x+w,y+r,r);
+  ctx.lineTo(x+w,y+h-r); ctx.arcTo(x+w,y+h,x+w-r,y+h,r);
+  ctx.lineTo(x+r,y+h); ctx.arcTo(x,y+h,x,y+h-r,r);
+  ctx.lineTo(x,y+r); ctx.arcTo(x,y,x+r,y,r); ctx.closePath();
+}
+
+// ─── vertex & edge handles ───
+function drawHandles(){
+  // edge midpoints
+  const mids=edgeMid(S.verts);
+  mids.forEach((m,i)=>{
+    const hov=S.hovE===i, drag=S.drag.on&&S.drag.type==='e'&&S.drag.idx===i;
+    cx.save();
+    cx.beginPath();
+    const s=drag?7:hov?6:4;
+    cx.moveTo(m.x, m.y-s); cx.lineTo(m.x+s, m.y); cx.lineTo(m.x, m.y+s); cx.lineTo(m.x-s, m.y); cx.closePath();
+    cx.fillStyle=drag?'#4ecdc4':hov?'#4ecdc4bb':'#2a4a50';
+    cx.fill(); cx.strokeStyle='#0c1018'; cx.lineWidth=1; cx.stroke();
+    cx.restore();
+  });
+
+  // corner vertices
+  S.verts.forEach((v,i)=>{
+    const hov=S.hovV===i, drag=S.drag.on&&S.drag.type==='v'&&S.drag.idx===i;
+    cx.save();
+    cx.beginPath(); cx.arc(v.x,v.y,drag?8:hov?7:5,0,Math.PI*2);
+    cx.fillStyle=drag?'#d4a843':hov?'#d4a843cc':'#7a6a4a';
+    cx.fill(); cx.strokeStyle='#0c1018'; cx.lineWidth=1.5; cx.stroke();
+    if(hov||drag){
+      cx.beginPath(); cx.arc(v.x,v.y,13,0,Math.PI*2);
+      cx.strokeStyle='rgba(212,168,67,.3)'; cx.lineWidth=1; cx.stroke();
+    }
+    cx.restore();
+  });
+}
+
+// ─── rotation ring overlay ───
+function drawRotRing(cen,bb){
+  const ringR = Math.min(bb.w,bb.h)*0.52;
+  const rot   = S.vaastuRot*Math.PI/180;
+  const isRotTool = S.tool==='rot';
+  const isDragging = S.rotDrag.on;
+
+  cx.save();
+
+  // ── Dashed orbit ring ──
+  cx.beginPath();
+  cx.arc(cen.x,cen.y,ringR,0,Math.PI*2);
+  cx.strokeStyle = isDragging ? 'rgba(212,168,67,0.7)'
+                 : isRotTool  ? 'rgba(212,168,67,0.5)'
+                              : 'rgba(212,168,67,0.22)';
+  cx.lineWidth   = isDragging ? 1.8 : isRotTool ? 1.4 : 1;
+  cx.setLineDash(isDragging ? [] : [5,4]);
+  cx.stroke();
+  cx.setLineDash([]);
+
+  // ── 16 small tick marks around ring ──
+  Z16.forEach(z=>{
+    const a = z[3]*Math.PI/180 + rot;
+    const inner = ringR-5, outer = ringR+5;
+    cx.beginPath();
+    cx.moveTo(cen.x+inner*Math.cos(a), cen.y+inner*Math.sin(a));
+    cx.lineTo(cen.x+outer*Math.cos(a), cen.y+outer*Math.sin(a));
+    cx.strokeStyle = z[8]+'bb';
+    cx.lineWidth   = 1.5;
+    cx.stroke();
+  });
+
+  // ── North pointer needle (rotates with vaastuRot) ──
+  // North on canvas is 270° raw; with rotation: 270° + vaastuRot
+  const northAngle = (270*Math.PI/180) + rot;
+  const nx = cen.x + ringR*Math.cos(northAngle);
+  const ny = cen.y + ringR*Math.sin(northAngle);
+
+  // needle line from centre to ring
+  cx.beginPath();
+  cx.moveTo(cen.x, cen.y);
+  cx.lineTo(nx, ny);
+  cx.strokeStyle = 'rgba(212,168,67,0.55)';
+  cx.lineWidth   = 1;
+  cx.setLineDash([3,3]);
+  cx.stroke();
+  cx.setLineDash([]);
+
+  // North arrowhead dot on ring
+  cx.beginPath(); cx.arc(nx,ny,5,0,Math.PI*2);
+  cx.fillStyle   = '#d4a843';
+  cx.fill();
+  cx.strokeStyle = '#0c1018'; cx.lineWidth=1; cx.stroke();
+
+  // "N" label just outside ring
+  const labelR = ringR+16;
+  const lx = cen.x+labelR*Math.cos(northAngle);
+  const ly = cen.y+labelR*Math.sin(northAngle);
+  cx.font='bold 10px Inter'; cx.fillStyle='#d4a843';
+  cx.textAlign='center'; cx.textBaseline='middle';
+  cx.fillText('N',lx,ly);
+
+  // ── Drag handle knob (opposite side of North = South pointer = grab point) ──
+  const handleAngle = northAngle + Math.PI; // opposite = South marker = drag knob
+  const hx = cen.x + ringR*Math.cos(handleAngle);
+  const hy = cen.y + ringR*Math.sin(handleAngle);
+
+  // outer glow when active
+  if(isRotTool||isDragging){
+    cx.beginPath(); cx.arc(hx,hy,12,0,Math.PI*2);
+    cx.fillStyle='rgba(78,205,196,0.15)';
+    cx.fill();
+  }
+  cx.beginPath(); cx.arc(hx,hy,7,0,Math.PI*2);
+  cx.fillStyle = isDragging ? '#4ecdc4' : isRotTool ? '#4ecdc4cc' : '#2a4a5088';
+  cx.fill();
+  cx.strokeStyle='#0c1018'; cx.lineWidth=1.5; cx.stroke();
+
+  // rotation icon inside knob
+  cx.save();
+  cx.translate(hx,hy);
+  cx.strokeStyle='rgba(9,14,22,0.9)'; cx.lineWidth=1.2;
+  cx.beginPath(); cx.arc(0,0,3,0.3,Math.PI*1.7); cx.stroke();
+  cx.beginPath(); cx.moveTo(3*Math.cos(Math.PI*1.7)-1.5,3*Math.sin(Math.PI*1.7));
+               cx.lineTo(3*Math.cos(Math.PI*1.7)+1,3*Math.sin(Math.PI*1.7)-2); cx.stroke();
+  cx.restore();
+
+  // ── Rotation angle arc (shows how far rotated from 0) ──
+  if(S.vaastuRot>0.5){
+    const arcR = ringR*0.18;
+    cx.beginPath();
+    cx.arc(cen.x,cen.y,arcR, -Math.PI/2, -Math.PI/2+rot, rot<0);
+    cx.strokeStyle='rgba(212,168,67,0.6)';
+    cx.lineWidth=2;
+    cx.stroke();
+    // degree label near arc
+    const midA = -Math.PI/2 + rot/2;
+    const tx=cen.x+(arcR+12)*Math.cos(midA), ty=cen.y+(arcR+12)*Math.sin(midA);
+    cx.font='bold 9px Inter'; cx.fillStyle='rgba(212,168,67,0.85)';
+    cx.textAlign='center'; cx.textBaseline='middle';
+    cx.fillText(S.vaastuRot.toFixed(0)+'°', tx, ty);
+  }
+
+  cx.restore();
+}
+
+// ─── floating dimension labels ───
+function drawDims(){
+  if(S.verts.length<2) return;
+  const vs=S.verts;
+  cx.save();
+  cx.font='9.5px Inter'; cx.textAlign='center'; cx.textBaseline='middle';
+  for(let i=0;i<vs.length;i++){
+    const j=(i+1)%vs.length;
+    const d=dst(vs[i].x,vs[i].y,vs[j].x,vs[j].y);
+    if(d<18) continue;
+    const mx=(vs[i].x+vs[j].x)/2, my=(vs[i].y+vs[j].y)/2;
+    const ft=(d/S.scale).toFixed(1);
+    const ang=Math.atan2(vs[j].y-vs[i].y,vs[j].x-vs[i].x);
+    const ox=-Math.sin(ang)*14, oy=Math.cos(ang)*14;
+    const lx=mx+ox, ly=my+oy;
+    const tw=cx.measureText(ft+' ft').width+8;
+    cx.fillStyle='rgba(9,14,22,.8)';
+    cx.beginPath(); roundRect(cx,lx-tw/2,ly-9,tw,18,4); cx.fill();
+    cx.fillStyle='rgba(212,168,67,.92)';
+    cx.fillText(ft+' ft',lx,ly);
+  }
+  cx.restore();
+}
+
+// ═══════════════════════════════════════════════════════
+// ZONE INFO CARD
+// ═══════════════════════════════════════════════════════
+function updateZoneCard(idx){
+  const msg=document.getElementById('zmsg');
+  const card=document.getElementById('zcard');
+  if(idx<0){ msg.style.display='flex'; card.style.display='none'; return; }
+  msg.style.display='none'; card.style.display='block';
+  const z=Z16[idx];
+  // col = z[8], zone descriptions are embedded in dos/donts arrays z[12]/z[13]
+  card.innerHTML=`
+    <div style="margin-bottom:11px">
+      <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px">
+        <div style="width:10px;height:10px;border-radius:50%;background:${z[8]};flex-shrink:0"></div>
+        <span style="font-size:9.5px;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase">${z[1]}</span>
+      </div>
+      <div style="font-family:'Playfair Display',serif;font-size:26px;color:var(--txt);margin-bottom:2px">${z[2]}</div>
+      <div style="font-size:11.5px;color:${z[8]};margin-bottom:8px;font-style:italic">Devta: ${z[4]}</div>
+    </div>
+    <div class="irow"><span class="irl">Element</span><span class="irv">${z[5]}</span></div>
+    <div class="irow"><span class="irl">Energy</span><span class="irv">${z[6]}</span></div>
+    <div class="irow"><span class="irl">Attribute</span><span class="irv">${z[10]}</span></div>
+    <div class="irow"><span class="irl">Ideal Room</span><span class="irv">${z[11]}</span></div>
+    <div style="margin-top:10px">
+      <div class="dtit" style="color:#4ade80">
+        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+        Recommended
+      </div>
+      ${z[12].map(d=>`<div class="dil">${d}</div>`).join('')}
+    </div>
+    <div style="margin-top:8px">
+      <div class="dtit" style="color:#f87171">
+        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        Avoid
+      </div>
+      ${z[13].map(d=>`<div class="xil">${d}</div>`).join('')}
+    </div>
+    <div style="margin-top:12px;padding:8px;background:var(--bg);border-radius:6px;border:1px solid ${z[8]}33">
+      <div style="font-size:8.5px;color:var(--dim);letter-spacing:1.2px;margin-bottom:4px">ZONE COLOUR</div>
+      <div style="display:flex;align-items:center;gap:7px">
+        <div style="flex:1;height:5px;border-radius:3px;background:${z[8]};opacity:.65"></div>
+        <span style="font-size:9.5px;color:${z[8]}">${z[8]}</span>
+      </div>
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════════
+// COMPASS BAR — 0–360° Vaastu ruler with live needle
+// ═══════════════════════════════════════════════════════
+const cbEl  = document.getElementById('compassBar');
+const cbCtx = cbEl.getContext('2d');
+
+function resizeCompassBar(){
+  const wrap = document.getElementById('compassWrap');
+  cbEl.width  = wrap.clientWidth;
+  cbEl.height = wrap.clientHeight;
+  drawCompassBar();
+}
+window.addEventListener('resize', resizeCompassBar);
+
+// Clicking the compass bar sets the "inspected" angle directly
+cbEl.addEventListener('mousemove', e=>{
+  const r2=cbEl.getBoundingClientRect();
+  const mx=e.clientX-r2.left;
+  const ang=Math.max(0,Math.min(359.9,(mx/cbEl.width)*360));
+
+  if(e.buttons===1){
+    // drag on bar → set vaastuRot directly
+    S.vaastuRot = ang;
+    document.getElementById('rotReadout').textContent=ang.toFixed(1)+'°';
+  }
+
+  S.compassAngle=ang;
+  S.compassX=mx;
+  let zoneName='—';
+  for(let i=0;i<Z16.length;i++){
+    const za=Z16[i][3]; let s=za-11.25,e2=za+11.25;
+    if(s<0)s+=360; if(e2>=360)e2-=360;
+    let hit=s>e2?(ang>=s||ang<e2):(ang>=s&&ang<e2);
+    if(hit){zoneName=Z16[i][1]+' · '+Z16[i][4];break;}
+  }
+  document.getElementById('compassAngle').textContent=`${ang.toFixed(1)}°  |  ${zoneName}`;
+  cbEl.style.cursor= e.buttons===1 ? 'grabbing' : 'ew-resize';
+});
+cbEl.addEventListener('mousedown', e=>{
+  cbEl.style.cursor='grabbing';
+  // immediate set on click
+  const r2=cbEl.getBoundingClientRect();
+  const mx=e.clientX-r2.left;
+  const ang=Math.max(0,Math.min(359.9,(mx/cbEl.width)*360));
+  S.vaastuRot=ang;
+  document.getElementById('rotReadout').textContent=ang.toFixed(1)+'°';
+});
+cbEl.addEventListener('mouseup',()=>{ cbEl.style.cursor='ew-resize'; });
+cbEl.addEventListener('mouseleave', ()=>{ cbEl.style.cursor='default'; });
+
+function drawCompassBar(){
+  const W=cbEl.width, H=cbEl.height;
+  if(W<10||H<10) return;
+  cbCtx.clearRect(0,0,W,H);
+
+  const trackTop=20, trackH=H-trackTop-4;
+
+  // ── 1. Zone colour segments ──
+  Z16.forEach((z,i)=>{
+    const startDeg = z[3]-11.25;
+    const endDeg   = z[3]+11.25;
+    // handle wrap-around (ENE crosses 0°)
+    const draw=(s,e)=>{
+      const x1=(s/360)*W, x2=(e/360)*W;
+      cbCtx.fillStyle=z[7].replace(/[\d.]+\)$/,'0.72)');
+      cbCtx.fillRect(x1, trackTop, x2-x1, trackH);
+      // zone border line
+      cbCtx.strokeStyle=z[8]+'88';
+      cbCtx.lineWidth=1;
+      cbCtx.beginPath(); cbCtx.moveTo(x1,trackTop); cbCtx.lineTo(x1,trackTop+trackH); cbCtx.stroke();
+    };
+    if(startDeg<0){
+      draw(startDeg+360, 360);
+      draw(0, endDeg);
+    } else if(endDeg>360){
+      draw(startDeg, 360);
+      draw(0, endDeg-360);
+    } else {
+      draw(startDeg, endDeg);
+    }
+  });
+
+  // ── 2. Highlight hovered/selected zone on bar ──
+  const activeZone = S.compassAngle>=0 ? (()=>{
+    let found=-1;
+    for(let i=0;i<Z16.length;i++){
+      const za=Z16[i][3]; let s=za-11.25,e2=za+11.25;
+      if(s<0)s+=360; if(e2>=360)e2-=360;
+      let hit=s>e2?(S.compassAngle>=s||S.compassAngle<e2):(S.compassAngle>=s&&S.compassAngle<e2);
+      if(hit){found=i;break;}
+    }
+    return found;
+  })() : S.selZone;
+
+  if(activeZone>=0){
+    const z=Z16[activeZone];
+    let s=z[3]-11.25, e2=z[3]+11.25;
+    const drawHL=(s2,e2)=>{
+      cbCtx.fillStyle=z[8]+'30';
+      cbCtx.fillRect((s2/360)*W, trackTop, ((e2-s2)/360)*W, trackH);
+      // top accent bar
+      cbCtx.fillStyle=z[8];
+      cbCtx.fillRect((s2/360)*W, trackTop, ((e2-s2)/360)*W, 2.5);
+    };
+    if(s<0){ drawHL(s+360,360); drawHL(0,e2); }
+    else if(e2>360){ drawHL(s,360); drawHL(0,e2-360); }
+    else drawHL(s,e2);
+  }
+
+  // ── 3. Tick marks & degree numbers ──
+  // Every 22.5° = zone boundary
+  for(let d=0;d<=360;d+=22.5){
+    const xp=(d/360)*W;
+    cbCtx.strokeStyle='rgba(212,168,67,0.45)';
+    cbCtx.lineWidth=1;
+    cbCtx.beginPath(); cbCtx.moveTo(xp, trackTop-1); cbCtx.lineTo(xp, trackTop+trackH); cbCtx.stroke();
+  }
+  // Every 45° = major tick with label
+  for(let d=0;d<=360;d+=45){
+    const xp=(d/360)*W;
+    cbCtx.strokeStyle='rgba(212,168,67,0.7)';
+    cbCtx.lineWidth=1.5;
+    cbCtx.beginPath(); cbCtx.moveTo(xp, trackTop-3); cbCtx.lineTo(xp, trackTop+trackH); cbCtx.stroke();
+    // degree number
+    cbCtx.fillStyle='rgba(212,168,67,0.8)';
+    cbCtx.font='bold 8px Inter';
+    cbCtx.textAlign='center'; cbCtx.textBaseline='bottom';
+    cbCtx.fillText(d+'°', xp, trackTop-1);
+  }
+
+  // ── 4. Devta / direction labels inside each segment ──
+  Z16.forEach(z=>{
+    const xp=(z[3]/360)*W;
+    const segW=(22.5/360)*W;
+    if(segW<30) return; // too narrow to label
+
+    // abbreviated label: direction short
+    cbCtx.save();
+    cbCtx.font=`bold ${Math.min(10,segW*0.28)}px Inter`;
+    cbCtx.fillStyle=z[8];
+    cbCtx.textAlign='center'; cbCtx.textBaseline='middle';
+    cbCtx.globalAlpha=0.92;
+    cbCtx.fillText(z[2], xp, trackTop + trackH*0.32);
+    cbCtx.font=`${Math.min(8,segW*0.22)}px Inter`;
+    cbCtx.fillStyle='rgba(230,220,210,0.75)';
+    cbCtx.fillText(z[4], xp, trackTop + trackH*0.65);
+    cbCtx.restore();
+  });
+
+  // ── 5. North marker at 270° (canvas math North) ──
+  {
+    const xN=(270/360)*W;
+    cbCtx.save();
+    cbCtx.fillStyle='#d4a843';
+    cbCtx.font='bold 9px Inter';
+    cbCtx.textAlign='center'; cbCtx.textBaseline='bottom';
+    cbCtx.fillText('▲N', xN, trackTop-1);
+    cbCtx.restore();
+  }
+
+  // ── 6. Cardinal markers at top ──
+  const cardinals=[{d:0,l:'E'},{d:90,l:'S'},{d:180,l:'W'},{d:270,l:'N'},{d:360,l:'E'}];
+  cardinals.forEach(c=>{
+    if(c.d===0||c.d===360) return; // already labeled as degree
+    const xp=(c.d/360)*W;
+    cbCtx.fillStyle='rgba(180,200,220,0.6)';
+    cbCtx.font='bold 8px Inter';
+    cbCtx.textAlign='center'; cbCtx.textBaseline='bottom';
+    cbCtx.fillText(c.l, xp, trackTop-1);
+  });
+
+  // ── 7. Persistent vaastuRot needle (gold) ──
+  {
+    const rotX=(S.vaastuRot/360)*W;
+    cbCtx.save();
+    cbCtx.strokeStyle='#d4a843';
+    cbCtx.lineWidth=2;
+    cbCtx.shadowColor='#d4a843';
+    cbCtx.shadowBlur=8;
+    cbCtx.beginPath(); cbCtx.moveTo(rotX, trackTop-5); cbCtx.lineTo(rotX, trackTop+trackH+2); cbCtx.stroke();
+    cbCtx.shadowBlur=0;
+    // gold triangle at top
+    cbCtx.fillStyle='#d4a843';
+    cbCtx.beginPath(); cbCtx.moveTo(rotX,trackTop+2); cbCtx.lineTo(rotX-6,trackTop-8); cbCtx.lineTo(rotX+6,trackTop-8); cbCtx.closePath(); cbCtx.fill();
+    // rotation angle pill below
+    const label2=S.vaastuRot.toFixed(1)+'°';
+    cbCtx.font='bold 9px Inter'; cbCtx.textAlign='center'; cbCtx.textBaseline='top';
+    const tw2=cbCtx.measureText(label2).width+10;
+    let px3=Math.max(tw2/2+2, Math.min(W-tw2/2-2, rotX));
+    cbCtx.fillStyle='rgba(212,168,67,0.9)';
+    cbCtx.strokeStyle='rgba(212,168,67,0.5)';
+    cbCtx.lineWidth=1;
+    cbCtx.beginPath(); cbCtx.roundRect(px3-tw2/2, trackTop+trackH+3, tw2, 14, 4); cbCtx.fill(); cbCtx.stroke();
+    cbCtx.fillStyle='#0c1018';
+    cbCtx.fillText(label2, px3, trackTop+trackH+5);
+    cbCtx.restore();
+  }
+
+  // ── 8. Live hover needle (white — only when mouse is over canvas or bar) ──
+  if(S.compassX>=0 && S.compassAngle>=0 && Math.abs(S.compassAngle-S.vaastuRot)>0.5){
+    const nx = S.compassX;
+    cbCtx.save();
+    cbCtx.strokeStyle='rgba(255,255,255,0.55)';
+    cbCtx.lineWidth=1;
+    cbCtx.setLineDash([3,3]);
+    cbCtx.beginPath(); cbCtx.moveTo(nx, trackTop-2); cbCtx.lineTo(nx, trackTop+trackH); cbCtx.stroke();
+    cbCtx.setLineDash([]);
+    const label=S.compassAngle.toFixed(1)+'°';
+    cbCtx.font='9px Inter'; cbCtx.textAlign='center'; cbCtx.textBaseline='top';
+    const tw=cbCtx.measureText(label).width+8;
+    let px2=Math.max(tw/2+2, Math.min(W-tw/2-2, nx));
+    // only show if not too close to gold needle
+    if(Math.abs(nx-(S.vaastuRot/360)*W)>20){
+      cbCtx.fillStyle='rgba(9,14,22,0.85)';
+      cbCtx.strokeStyle='rgba(255,255,255,0.25)';
+      cbCtx.lineWidth=1;
+      cbCtx.beginPath(); cbCtx.roundRect(px2-tw/2, trackTop+trackH+3, tw, 14, 4); cbCtx.fill(); cbCtx.stroke();
+      cbCtx.fillStyle='rgba(200,210,230,0.9)';
+      cbCtx.fillText(label, px2, trackTop+trackH+5);
+    }
+    cbCtx.restore();
+  }
+
+  // ── 8. Outer border ──
+  cbCtx.strokeStyle=`rgba(42,54,80,0.8)`;
+  cbCtx.lineWidth=1;
+  cbCtx.strokeRect(0,trackTop,W,trackH);
+}
+
+// Hook compass redraw into RAF loop
+const _origRender = render;
+
+// ═══════════════════════════════════════════════════════
+// TAB SWITCHING
+// ═══════════════════════════════════════════════════════
+function switchTab(id){
+  document.querySelectorAll('.rptab').forEach(t=>t.classList.remove('act'));
+  document.querySelectorAll('.rptabcontent').forEach(t=>t.classList.remove('act'));
+  document.getElementById('tab-'+id).classList.add('act');
+  document.getElementById('tc-'+id).classList.add('act');
+}
+
+// ═══════════════════════════════════════════════════════
+// IMAGE OVERLAY STATE & HANDLERS
+// ═══════════════════════════════════════════════════════
+let IMG = {
+  el: null,         // HTMLImageElement
+  data: null,       // base64 data URL
+  visible: true,
+  opacity: 0.45,
+  scale: 1.0,
+  x: 0, y: 0,      // position offset from canvas center
+  drag: {on:false, sx:0, sy:0, ox:0, oy:0},
+  showHint: false,
+  lockToVaastu: true,  // when true, rotates with Vaastu overlay
+  extraRot: 0,         // extra independent rotation on top of vaastuRot
+};
+
+// Drag & drop on the drop zone
+const dropZone = document.getElementById('imgDropZone');
+dropZone.addEventListener('dragover', e=>{ e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', ()=>dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e=>{
+  e.preventDefault(); dropZone.classList.remove('dragover');
+  const f = e.dataTransfer.files[0];
+  if(f && f.type.startsWith('image/')) handleImgFile(f);
+});
+
+function handleImgFile(file){
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ev=>{
+    IMG.data = ev.target.result;
+    IMG.el   = new Image();
+    IMG.el.onload = ()=>{
+      IMG.visible = true;
+      IMG.opacity = 0.45;
+      IMG.scale   = 1.0;
+      imgCenter();
+      showImgThumb();
+      document.getElementById('imgOverlayBar').style.display='flex';
+    };
+    IMG.el.src = IMG.data;
+    document.getElementById('imgPreview').src = IMG.data;
+  };
+  reader.readAsDataURL(file);
+}
+
+function showImgThumb(){
+  document.getElementById('imgThumb').style.display='block';
+}
+
+function removeImg(){
+  IMG.el=null; IMG.data=null; IMG.visible=false;
+  document.getElementById('imgThumb').style.display='none';
+  document.getElementById('imgOverlayBar').style.display='none';
+  document.getElementById('imgPreview').src='';
+}
+
+function toggleImgOnCanvas(){
+  IMG.visible=!IMG.visible;
+  document.getElementById('imgBlendBtn').textContent=IMG.visible?'Hide':'Show';
+}
+
+function updateImgOpacity(v){
+  IMG.opacity=v/100;
+  document.getElementById('imgOpVal').textContent=v+'%';
+  document.getElementById('imgOpacity').value=v;
+}
+
+function updateImgScale(v){
+  IMG.scale=v/100;
+  document.getElementById('imgScaleVal').textContent=v+'%';
+}
+
+function imgNudge(dx,dy){ IMG.x+=dx; IMG.y+=dy; }
+
+function imgCenter(){
+  IMG.x=0; IMG.y=0;
+  document.getElementById('imgScaleSlider').value=100;
+  document.getElementById('imgScaleVal').textContent='100%';
+  document.getElementById('imgRotSlider').value=0;
+  document.getElementById('imgRotVal').textContent='0°';
+  IMG.extraRot=0;
+}
+
+function updateImgRot(v){
+  IMG.extraRot=parseFloat(v);
+  document.getElementById('imgRotVal').textContent=parseFloat(v).toFixed(0)+'°';
+}
+
+function toggleLockToVaastu(){
+  IMG.lockToVaastu=!IMG.lockToVaastu;
+  const tog=document.getElementById('lockToggle');
+  const knob=document.getElementById('lockKnob');
+  if(IMG.lockToVaastu){
+    tog.style.background='var(--gold)';
+    knob.style.right='2px'; knob.style.left='auto';
+  } else {
+    tog.style.background='var(--bd)';
+    knob.style.left='2px'; knob.style.right='auto';
+  }
+}
+
+// Draw image overlay on canvas (called inside render loop)
+function drawImgOverlay(){
+  if(!IMG.el || !IMG.visible) return;
+  const cen = S.verts.length>2 ? centroid(S.verts) : {x:cv.width/2, y:cv.height/2};
+  const W = IMG.el.naturalWidth  * IMG.scale;
+  const H = IMG.el.naturalHeight * IMG.scale;
+  const rot = (IMG.lockToVaastu ? S.vaastuRot : 0) * Math.PI/180 + IMG.extraRot * Math.PI/180;
+
+  cx.save();
+  // Translate to centroid + user offset, rotate, then draw centred
+  cx.translate(cen.x + IMG.x, cen.y + IMG.y);
+  cx.rotate(rot);
+  cx.globalAlpha = IMG.opacity;
+  cx.drawImage(IMG.el, -W/2, -H/2, W, H);
+
+  // Bounding box outline (rotated with image)
+  cx.globalAlpha = 0.65;
+  cx.strokeStyle = IMG.drag.on ? '#d4a843' : 'rgba(78,205,196,0.8)';
+  cx.lineWidth = 1.5;
+  cx.setLineDash([5,3]);
+  cx.strokeRect(-W/2, -H/2, W, H);
+  cx.setLineDash([]);
+
+  // Corner drag handles
+  const corners=[[-W/2,-H/2],[W/2,-H/2],[W/2,H/2],[-W/2,H/2]];
+  corners.forEach(([cx2,cy2])=>{
+    cx.beginPath(); cx.arc(cx2,cy2,5,0,Math.PI*2);
+    cx.fillStyle='rgba(78,205,196,0.9)'; cx.fill();
+    cx.strokeStyle='#0c1018'; cx.lineWidth=1; cx.stroke();
+  });
+
+  cx.restore();
+
+  // Alt+drag tooltip hint
+  if(IMG.showHint){
+    cx.save();
+    cx.font='10px Inter'; cx.textAlign='center'; cx.textBaseline='middle';
+    cx.fillStyle='rgba(9,14,22,0.85)';
+    cx.beginPath(); cx.roundRect(cen.x+IMG.x-75, cen.y+IMG.y+H/2*IMG.scale+8, 150, 18, 4); cx.fill();
+    cx.fillStyle='rgba(78,205,196,0.9)';
+    cx.fillText('Alt+Drag to move image', cen.x+IMG.x, cen.y+IMG.y+H/2*IMG.scale+17);
+    cx.restore();
+  }
+}
+
+// Canvas drag for image overlay — Alt+drag moves image, plain drag on image also works
+cv.addEventListener('mousedown', e=>{
+  if(!IMG.el||!IMG.visible) return;
+  const {x,y}=mxy(e);
+  const cen = S.verts.length>2 ? centroid(S.verts) : {x:cv.width/2,y:cv.height/2};
+  // Check if click is within the rotated image bounds using inverse rotation
+  const rot = ((IMG.lockToVaastu ? S.vaastuRot : 0) + IMG.extraRot) * Math.PI/180;
+  const dx=x-(cen.x+IMG.x), dy=y-(cen.y+IMG.y);
+  const rx = dx*Math.cos(-rot) - dy*Math.sin(-rot);
+  const ry = dx*Math.sin(-rot) + dy*Math.cos(-rot);
+  const W=IMG.el.naturalWidth*IMG.scale, H=IMG.el.naturalHeight*IMG.scale;
+  const inBounds = rx>=-W/2 && rx<=W/2 && ry>=-H/2 && ry<=H/2;
+  if(e.altKey && inBounds){
+    IMG.drag={on:true,sx:x,sy:y,ox:IMG.x,oy:IMG.y};
+    cv.style.cursor='move';
+    e.stopPropagation();
+  }
+}, true);
+
+cv.addEventListener('mousemove', e=>{
+  if(IMG.drag.on){
+    const {x,y}=mxy(e);
+    IMG.x=IMG.drag.ox+(x-IMG.drag.sx);
+    IMG.y=IMG.drag.oy+(y-IMG.drag.sy);
+    cv.style.cursor='move';
+  }
+  // show hint when Alt held and image loaded
+  if(IMG.el && IMG.visible){
+    IMG.showHint = e.altKey;
+  }
+}, true);
+
+cv.addEventListener('mouseup', ()=>{ IMG.drag.on=false; IMG.showHint=false; }, true);
+
+// ═══════════════════════════════════════════════════════
+// AI ANALYSIS — Anthropic API
+// ═══════════════════════════════════════════════════════
+let aiRunning = false;
+
+async function runAIAnalysis(){
+  if(aiRunning) return;
+  aiRunning=true;
+  switchTab('ai');
+
+  const panel = document.getElementById('aiPanel');
+  panel.innerHTML=`<div class="ai-loading"><div class="ai-spinner"></div>Analysing your floor plan against Vaastu Shastra traditions…</div>`;
+
+  // Build context from current state
+  const zoneCtx = S.verts.length>2 ? buildZoneContext() : 'No floor plan drawn yet.';
+
+  // Build the user message
+  const messages = [];
+  let userContent = [];
+
+  // If image uploaded, include it
+  if(IMG.data){
+    const b64 = IMG.data.split(',')[1];
+    const mime = IMG.data.split(';')[0].split(':')[1];
+    userContent.push({
+      type:'image',
+      source:{type:'base64', media_type:mime, data:b64}
+    });
+    userContent.push({
+      type:'text',
+      text:`This is a floor plan image. Please analyse it carefully.`
+    });
+  }
+
+  userContent.push({
+    type:'text',
+    text:`You are an expert Vaastu Shastra consultant with deep knowledge of Brihat Samhita, Manasara, Mayamata, and modern Vaastu texts. Analyse this floor plan and current Vaastu zone overlay context.
+
+Current floor plan context:
+${zoneCtx}
+Vaastu rotation applied: ${S.vaastuRot.toFixed(1)}°
+
+Please provide a detailed JSON response with exactly this structure:
+{
+  "score": <0-100 overall Vaastu compliance score>,
+  "grade": "<A/B/C/D/F>",
+  "summary": "<2-3 sentence overall assessment>",
+  "correct": [
+    {"zone":"<zone name>","room":"<room>","reason":"<why it is correct per Vaastu>"}
+  ],
+  "incorrect": [
+    {"zone":"<zone name>","room":"<room>","issue":"<what is wrong>","fix":"<recommended remedy>","severity":"high|medium|low"}
+  ],
+  "tips": [
+    {"tip":"<actionable Vaastu tip>","source":"<tradition/text name>","priority":"high|medium|low"}
+  ],
+  "references": [
+    {"name":"<source name>","url":"<URL of authoritative Vaastu website>","note":"<brief note>"}
+  ]
+}
+
+Base your analysis on multiple traditions:
+1. Classical texts: Manasara, Mayamata, Vishwakarma Prakash, Samarangana Sutradhar
+2. Modern practitioners: Dr. Smita Narang, Pt. Ajai Bhambi, Vastu Shastra.org
+3. Regional variations: North Indian vs South Indian Agama Shastra Vaastu
+4. Ensure references include real URLs from: vastuplus.com, vastushastra.com, vastu-shastra.com, astrosage.com/vastu, or similar authoritative sites.
+
+Return ONLY valid JSON, no markdown fences.`
+  });
+
+  messages.push({role:'user', content: userContent});
+
+  try{
+    const res = await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        'anthropic-version':'2023-06-01',
+        'anthropic-dangerous-direct-browser-access':'true'
+      },
+      body: JSON.stringify({
+        model:'claude-sonnet-4-20250514',
+        max_tokens:1800,
+        system:`You are an expert Vaastu Shastra consultant. Always respond with valid JSON only. No markdown, no preamble. Be thorough, practical, and cite multiple traditional and modern sources.`,
+        messages
+      })
+    });
+    const data = await res.json();
+    if(data.error){ renderAIError('API Error: '+data.error.message); aiRunning=false; return; }
+    const raw = data.content?.map(c=>c.text||'').join('') || '';
+    let parsed;
+    try{ parsed=JSON.parse(raw.replace(/```json\n?|```\n?/g,'').trim()); }
+    catch{ parsed=null; }
+    if(parsed) renderAIResult(parsed);
+    else       renderAIError('Could not parse response:<br><small style="word-break:break-all">'+raw.substring(0,300)+'</small>');
+  } catch(err){
+    renderAIError('Connection error: '+err.message);
+  }
+  aiRunning=false;
+}
+
+function buildZoneContext(){
+  const rot=S.vaastuRot;
+  const lines=Z16.map(z=>{
+    const actualAngle=((z[3]+rot)%360+360)%360;
+    return `${z[1]} (${z[2]}, ${actualAngle.toFixed(0)}°): Devta=${z[4]}, Ideal=${z[11]}`;
+  });
+  return 'Active 16-zone layout:\n'+lines.join('\n');
+}
+
+function renderAIResult(d){
+  const panel=document.getElementById('aiPanel');
+  const scoreColor = d.score>=75?'#4ade80':d.score>=50?'#eab308':'#f87171';
+  const gradeBg    = d.score>=75?'rgba(74,222,128,.12)':d.score>=50?'rgba(234,179,8,.12)':'rgba(248,113,113,.12)';
+
+  let correctHTML = (d.correct||[]).map(c=>`
+    <div class="ai-item">
+      <div class="ai-dot" style="background:#4ade80"></div>
+      <div><b style="color:#4ade80">${c.zone}</b> — ${c.room}<br><span style="font-size:9.5px">${c.reason}</span></div>
+    </div>`).join('');
+
+  let incorrectHTML = (d.incorrect||[]).map(c=>{
+    const col=c.severity==='high'?'#f87171':c.severity==='medium'?'#fb923c':'#eab308';
+    return `<div class="ai-item">
+      <div class="ai-dot" style="background:${col}"></div>
+      <div>
+        <b style="color:${col}">${c.zone}</b> — ${c.room}
+        <br><span style="font-size:9.5px;color:var(--muted)">${c.issue}</span>
+        <br><span style="font-size:9.5px;color:#4ade80">✦ Fix: ${c.fix}</span>
+      </div>
+    </div>`;}).join('');
+
+  let tipsHTML = (d.tips||[]).map(t=>{
+    const col=t.priority==='high'?'#f97316':t.priority==='medium'?'#eab308':'#38bdf8';
+    return `<div class="ai-item"><div class="ai-dot" style="background:${col}"></div><div>${t.tip}<br><span style="font-size:8.5px;color:var(--dim)">Source: ${t.source}</span></div></div>`;
+  }).join('');
+
+  let refsHTML = (d.references||[]).map(r=>
+    `<a href="${r.url}" target="_blank" rel="noopener">↗ ${r.name} — ${r.note}</a>`
+  ).join('');
+
+  panel.innerHTML=`
+    <div class="ai-score-ring">
+      <div class="score-circle" style="border-color:${scoreColor};background:${gradeBg}">
+        <div class="score-num" style="color:${scoreColor}">${d.score}</div>
+        <div class="score-lbl" style="color:${scoreColor}">${d.grade} Grade</div>
+      </div>
+    </div>
+    <div class="ai-section">
+      <div class="ai-sec-title" style="color:var(--muted)">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        Summary
+      </div>
+      <p style="font-size:10.5px;color:var(--muted);line-height:1.6">${d.summary}</p>
+    </div>
+    ${correctHTML?`<div class="ai-section">
+      <div class="ai-sec-title" style="color:#4ade80">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+        Correct Placements (${(d.correct||[]).length})
+      </div>${correctHTML}</div>`:''}
+    ${incorrectHTML?`<div class="ai-section">
+      <div class="ai-sec-title" style="color:#f87171">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#f87171" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        Issues & Fixes (${(d.incorrect||[]).length})
+      </div>${incorrectHTML}</div>`:''}
+    ${tipsHTML?`<div class="ai-section">
+      <div class="ai-sec-title" style="color:var(--gold)">✦ Vaastu Tips</div>${tipsHTML}</div>`:''}
+    ${refsHTML?`<div class="ai-section">
+      <div class="ai-sec-title" style="color:var(--muted)">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+        Sources & References
+      </div>
+      <div class="ai-ref">${refsHTML}</div>
+    </div>`:''}
+    <button class="ithbtn gold" style="margin-top:4px;width:100%" onclick="runAIAnalysis()">↺ Re-analyse</button>
+  `;
+}
+
+function renderAIError(msg){
+  document.getElementById('aiPanel').innerHTML=`
+    <div class="ai-section">
+      <div class="ai-sec-title" style="color:#f87171">Analysis Error</div>
+      <p style="font-size:10px;color:var(--muted);line-height:1.6;word-break:break-all">${msg}</p>
+      <button class="ithbtn gold" style="margin-top:8px;width:100%" onclick="runAIAnalysis()">↺ Retry</button>
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════════
+// CHAT — AI Q&A with web search context
+// ═══════════════════════════════════════════════════════
+let chatHistory = [];
+
+function askQ(btn){ document.getElementById('chatTxt').value=btn.textContent; sendChat(); }
+
+async function sendChat(){
+  const txt=document.getElementById('chatTxt').value.trim();
+  if(!txt) return;
+  document.getElementById('chatTxt').value='';
+
+  appendMsg('user', txt);
+  chatHistory.push({role:'user',content:txt});
+
+  // typing indicator
+  const tyEl=document.createElement('div');
+  tyEl.className='ctyping'; tyEl.id='ctyping';
+  tyEl.innerHTML='<span></span><span></span><span></span>';
+  document.getElementById('chatMsgs').appendChild(tyEl);
+  scrollChat();
+
+  const systemPrompt=`You are an expert Vaastu Shastra consultant with deep knowledge of:
+- Classical texts: Manasara, Mayamata, Vishwakarma Prakash, Brihat Samhita, Samarangana Sutradhar
+- Modern practitioners and websites: vastushastra.com, vastuplus.com, vastu-shastra.com, astrosage.com/vastu, myvaastu.in, 99vastu.com
+- Regional traditions: North Indian Vaastu, South Indian Agama Shastra, Tantric Vaastu
+- Contemporary interpretations by Dr. Smita Narang, Pt. Ajai Bhambi, Dr. Khushdeep Bansal
+
+When answering:
+1. Compare perspectives from at least 2-3 different Vaastu traditions or sources
+2. Give practical, actionable remedies not just rules
+3. Note any contradictions between different schools of Vaastu
+4. End with 2-3 real reference URLs from authoritative Vaastu websites
+5. Format your response clearly with sections. Keep it concise but comprehensive.
+6. If there are low-cost remedies (crystals, colours, plants, mirrors), mention them.
+
+Current floor plan context: ${S.verts.length>2?buildZoneContext():'No plan drawn yet.'}
+Vaastu rotation: ${S.vaastuRot.toFixed(1)}°`;
+
+  try{
+    const res = await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        'anthropic-version':'2023-06-01',
+        'anthropic-dangerous-direct-browser-access':'true'
+      },
+      body:JSON.stringify({
+        model:'claude-sonnet-4-20250514',
+        max_tokens:900,
+        system:systemPrompt,
+        messages: chatHistory.slice(-8)
+      })
+    });
+    const data=await res.json();
+    if(data.error){
+      document.getElementById('ctyping')?.remove();
+      appendMsg('bot','API Error: '+data.error.message);
+      return;
+    }
+    const reply=data.content?.map(c=>c.text||'').join('')||'Sorry, no response received.';
+    chatHistory.push({role:'assistant',content:reply});
+    document.getElementById('ctyping')?.remove();
+
+    // Extract URLs for references
+    const refMatch=reply.match(/https?:\/\/[^\s\)\]>\"]+/g);
+    const cleanText=reply.replace(/https?:\/\/[^\s\)\]>\"]+/g,'').trim();
+    let refsHtml='';
+    if(refMatch&&refMatch.length){
+      const unique=[...new Set(refMatch)].slice(0,5);
+      refsHtml=`<div class="ref-links">📚 Sources:<br>${unique.map(u=>`<a href="${u}" target="_blank" rel="noopener">↗ ${u.replace(/https?:\/\/(www\.)?/,'').split('/')[0]}</a>`).join('')}</div>`;
+    }
+    appendMsg('bot', formatChatReply(cleanText)+refsHtml);
+  } catch(err){
+    document.getElementById('ctyping')?.remove();
+    appendMsg('bot','Connection error: '+err.message);
+  }
+  scrollChat();
+}
+
+function formatChatReply(text){
+  // Basic markdown-lite formatting
+  return text
+    .replace(/\*\*(.+?)\*\*/g,'<b>$1</b>')
+    .replace(/\*(.+?)\*/g,'<em>$1</em>')
+    .replace(/^#{1,3}\s+(.+)$/gm,'<b style="color:var(--gold)">$1</b>')
+    .replace(/^[-•]\s+(.+)$/gm,'<span style="color:var(--gold)">›</span> $1')
+    .replace(/\n\n/g,'<br><br>')
+    .replace(/\n/g,'<br>');
+}
+
+function appendMsg(role, html){
+  const d=document.createElement('div');
+  d.className='cmsg '+role;
+  d.innerHTML=html;
+  document.getElementById('chatMsgs').appendChild(d);
+  scrollChat();
+}
+
+function scrollChat(){
+  const el=document.getElementById('chatMsgs');
+  el.scrollTop=el.scrollHeight;
+}
+
+// ═══════════════════════════════════════════════════════
+// BOOT
+// ═══════════════════════════════════════════════════════
+buildShapeGrid();
+buildShape();
+setTool('sel');
+resizeCompassBar();
+render();
+</script>
+</body>
+</html>
