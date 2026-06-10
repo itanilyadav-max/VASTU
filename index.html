@@ -394,7 +394,7 @@ html,body{height:100%;overflow:hidden;font-family:'Inter',sans-serif;background:
         </div>
         <div style="display:flex;align-items:center;gap:8px">
           <label style="font-size:10px;color:var(--muted);width:70px">Extra Rot</label>
-          <input type="range" id="imgRotSlider" min="-180" max="180" value="0" style="flex:1;accent-color:var(--teal)" oninput="updateImgRot(this.value)">
+          <input type="range" id="imgRotSlider" min="-180" max="180" value="0" style="flex:1;accent-color:#4ecdc4" oninput="updateImgRot(this.value)">
           <span id="imgRotVal" style="font-size:10px;color:var(--teal);width:32px;text-align:right">0°</span>
         </div>
         <!-- Lock to Vaastu rotation toggle -->
@@ -763,49 +763,54 @@ function fitToView(){
 }
 
 // ═══════════════════════════════════════════════════════
-// MOUSE
+// MOUSE — unified handler
 // ═══════════════════════════════════════════════════════
 const VRAD=8, ERAD=7;
+let _activeTab = 'zone';
 
 function mxy(e){
   const r=cv.getBoundingClientRect();
   return {x:e.clientX-r.left, y:e.clientY-r.top};
 }
 
+function imgHitTest(x,y){
+  if(!IMG.el||!IMG.visible) return false;
+  const cen=S.verts.length>2?centroid(S.verts):{x:cv.width/2,y:cv.height/2};
+  const rot=((IMG.lockToVaastu?S.vaastuRot:0)+IMG.extraRot)*Math.PI/180;
+  const dx=x-(cen.x+IMG.x), dy=y-(cen.y+IMG.y);
+  const rx=dx*Math.cos(-rot)-dy*Math.sin(-rot);
+  const ry=dx*Math.sin(-rot)+dy*Math.cos(-rot);
+  const W=IMG.el.naturalWidth*IMG.scale, H=IMG.el.naturalHeight*IMG.scale;
+  return rx>=-W/2&&rx<=W/2&&ry>=-H/2&&ry<=H/2;
+}
+
 cv.addEventListener('mousedown', e=>{
   const {x,y}=mxy(e);
-  if(S.tool==='pan'){ S.pan={on:true,sx:x,sy:y,ox:0,oy:0}; cv.style.cursor='grabbing'; return; }
-
-  // ── Rotation drag ──
-  // Activate if: tool is 'rot', OR mouse is near the rotation ring
+  // Image drag: Alt+drag anywhere, or plain drag when Image tab active
+  if(IMG.el&&IMG.visible&&(e.altKey||_activeTab==='image')&&imgHitTest(x,y)){
+    IMG.drag={on:true,sx:x,sy:y,ox:IMG.x,oy:IMG.y};
+    cv.style.cursor='move'; return;
+  }
+  if(S.tool==='pan'){ S.pan={on:true,sx:x,sy:y}; cv.style.cursor='grabbing'; return; }
+  // Rotation drag: rot tool OR near ring
   if(S.verts.length>2){
     const cen=centroid(S.verts);
     const bb2=bbox(S.verts);
-    const ringR = Math.min(bb2.w,bb2.h)*0.52;
     const d=dst(x,y,cen.x,cen.y);
-    const onRing = Math.abs(d-ringR)<14;
-
-    if(S.tool==='rot' || onRing){
-      const startAngle=Math.atan2(y-cen.y,x-cen.x)*180/Math.PI;
-      S.rotDrag={on:true, startAngle, startRot:S.vaastuRot};
-      cv.style.cursor='grabbing';
-      return;
+    if(S.tool==='rot'||Math.abs(d-Math.min(bb2.w,bb2.h)*0.52)<14){
+      S.rotDrag={on:true,startAngle:Math.atan2(y-cen.y,x-cen.x)*180/Math.PI,startRot:S.vaastuRot};
+      cv.style.cursor='grabbing'; return;
     }
   }
-
-  // check vertex handles
   for(let i=0;i<S.verts.length;i++){
     if(dst(x,y,S.verts[i].x,S.verts[i].y)<VRAD+4){
-      S.drag={on:true,type:'v',idx:i,ox:x,oy:y,snapVerts:S.verts.map(v=>({...v}))};
-      return;
+      S.drag={on:true,type:'v',idx:i,ox:x,oy:y,snapVerts:S.verts.map(v=>({...v}))}; return;
     }
   }
-  // check edge midpoint handles
   const mids=edgeMid(S.verts);
   for(let i=0;i<mids.length;i++){
     if(dst(x,y,mids[i].x,mids[i].y)<ERAD+4){
-      S.drag={on:true,type:'e',idx:i,ox:x,oy:y,snapVerts:S.verts.map(v=>({...v}))};
-      return;
+      S.drag={on:true,type:'e',idx:i,ox:x,oy:y,snapVerts:S.verts.map(v=>({...v}))}; return;
     }
   }
 });
@@ -815,143 +820,88 @@ cv.addEventListener('mousemove', e=>{
   document.getElementById('coordInfo').textContent=
     `${(x/S.scale).toFixed(1)} ft,  ${(y/S.scale).toFixed(1)} ft`;
 
-  // Update compass needle based on angle from centroid
-  if(S.verts.length>2){
+  if(IMG.drag.on){
+    IMG.x=IMG.drag.ox+(x-IMG.drag.sx); IMG.y=IMG.drag.oy+(y-IMG.drag.sy);
+    cv.style.cursor='move'; return;
+  }
+  if(S.rotDrag.on&&S.verts.length>2){
     const cen=centroid(S.verts);
-    let ang=Math.atan2(y-cen.y, x-cen.x)*180/Math.PI;
-    if(ang<0) ang+=360;
-    S.compassAngle=ang;
-    // compass bar position: ang/360 * barWidth
+    const cur=Math.atan2(y-cen.y,x-cen.x)*180/Math.PI;
+    const newRot=((S.rotDrag.startRot+(cur-S.rotDrag.startAngle))%360+360)%360;
+    S.vaastuRot=newRot;
+    document.getElementById('rotReadout').textContent=newRot.toFixed(1)+'°';
     const bar=document.getElementById('compassBar');
-    S.compassX=(ang/360)*bar.width;
-    // find which zone
-    let zoneName='—';
+    S.compassAngle=newRot; S.compassX=(newRot/360)*bar.width;
+    document.getElementById('compassAngle').textContent=`${newRot.toFixed(1)}°  |  Vaastu Rotation`;
+    cv.style.cursor='grabbing'; return;
+  }
+  if(S.pan.on){
+    const dx=x-S.pan.sx, dy=y-S.pan.sy;
+    S.verts=S.verts.map(v=>({x:v.x+dx,y:v.y+dy}));
+    if(S.holeVerts.length) S.holeVerts=S.holeVerts.map(v=>({x:v.x+dx,y:v.y+dy}));
+    S.pan.sx=x; S.pan.sy=y; cv.style.cursor='grabbing'; return;
+  }
+  if(S.drag.on){
+    const sp=snapPt(x,y);
+    const dx=sp.x-S.drag.ox, dy=sp.y-S.drag.oy;
+    if(S.drag.type==='v'){
+      const nv=S.drag.snapVerts.map((v,i)=>i===S.drag.idx?{x:v.x+dx,y:v.y+dy}:{...v});
+      if(centroid(nv).area>500) S.verts=nv;
+    } else {
+      const mi=S.drag.idx, vi=S.verts[mi], vj=S.verts[(mi+1)%S.verts.length];
+      const ex=vj.x-vi.x, ey=vj.y-vi.y, len=Math.sqrt(ex*ex+ey*ey)||1;
+      const nx=-ey/len, ny=ex/len, proj=dx*nx+dy*ny;
+      const nv=S.drag.snapVerts.map((v,i)=>
+        (i===S.drag.idx||(i===(S.drag.idx+1)%S.verts.length))
+          ?{x:v.x+nx*proj,y:v.y+ny*proj}:{...v});
+      if(centroid(nv).area>500) S.verts=nv;
+    }
+    cv.style.cursor='grabbing'; return;
+  }
+
+  IMG.showHint=e.altKey&&!!IMG.el&&IMG.visible;
+  let hv=-1, he=-1, hz=-1, onRing=false;
+  for(let i=0;i<S.verts.length;i++)
+    if(dst(x,y,S.verts[i].x,S.verts[i].y)<VRAD+4){hv=i;break;}
+  if(hv<0){ const mids=edgeMid(S.verts); for(let i=0;i<mids.length;i++) if(dst(x,y,mids[i].x,mids[i].y)<ERAD+4){he=i;break;} }
+  if(hv<0&&he<0&&S.verts.length>2){
+    const cen=centroid(S.verts), bb2=bbox(S.verts);
+    onRing=Math.abs(dst(x,y,cen.x,cen.y)-Math.min(bb2.w,bb2.h)*0.52)<14;
+    hz=zoneAt(x,y,cen);
+    let ang=Math.atan2(y-cen.y,x-cen.x)*180/Math.PI; if(ang<0)ang+=360;
+    S.compassAngle=ang; S.compassX=(ang/360)*document.getElementById('compassBar').width;
+    let zn='—';
     for(let i=0;i<Z16.length;i++){
       const za=Z16[i][3]; let s=za-11.25,e2=za+11.25;
       if(s<0)s+=360; if(e2>=360)e2-=360;
-      let hit=s>e2?(ang>=s||ang<e2):(ang>=s&&ang<e2);
-      if(hit){zoneName=Z16[i][1]+' · '+Z16[i][4];break;}
+      if(s>e2?(ang>=s||ang<e2):(ang>=s&&ang<e2)){zn=Z16[i][1]+' · '+Z16[i][4];break;}
     }
-    document.getElementById('compassAngle').textContent=
-      `${ang.toFixed(1)}°  |  ${zoneName}`;
-  }
-
-  // ── Rotation drag active ──
-  if(S.rotDrag.on){
-    if(S.verts.length>2){
-      const cen=centroid(S.verts);
-      const curAngle=Math.atan2(y-cen.y,x-cen.x)*180/Math.PI;
-      let delta=curAngle-S.rotDrag.startAngle;
-      let newRot=(S.rotDrag.startRot+delta)%360;
-      if(newRot<0) newRot+=360;
-      S.vaastuRot=newRot;
-      document.getElementById('rotReadout').textContent=newRot.toFixed(1)+'°';
-      // sync compass needle to current rotation
-      const bar=document.getElementById('compassBar');
-      S.compassAngle=newRot;
-      S.compassX=(newRot/360)*bar.width;
-      // update zone name in compass
-      let zoneName='—';
-      for(let i=0;i<Z16.length;i++){
-        const za=(Z16[i][3]+newRot)%360;
-        let s=za-11.25,e2=za+11.25;
-        if(s<0)s+=360; if(e2>=360)e2-=360;
-        // show zone under north (270° in canvas = N)
-      }
-      document.getElementById('compassAngle').textContent=`${newRot.toFixed(1)}°  |  Vaastu Rotation`;
-    }
-    cv.style.cursor='grabbing';
-    return;
-  }
-
-  // PAN
-  if(S.pan.on){
-    const dx=x-S.pan.sx, dy=y-S.pan.sy;
-    S.verts=S.verts.map((v,i)=>({x:S.drag.snapVerts?S.drag.snapVerts[i].x+dx:v.x, y:S.drag.snapVerts?S.drag.snapVerts[i].y+dy:v.y}));
-    return;
-  }
-  if(S.tool==='pan') return;
-
-  if(S.drag.on){
-    const sp = snapPt(x,y);
-    const dx=sp.x-S.drag.ox, dy=sp.y-S.drag.oy;
-
-    if(S.drag.type==='v'){
-      const nv = S.drag.snapVerts.map((v,i)=> i===S.drag.idx ? {x:v.x+dx,y:v.y+dy} : {...v});
-      const c=centroid(nv);
-      if(c.area>500) S.verts=nv; // prevent collapse
-    }
-    if(S.drag.type==='e'){
-      // push both vertices of the edge perpendicularly
-      const mi=S.drag.idx;
-      const vi=S.verts[mi];
-      const vj=S.verts[(mi+1)%S.verts.length];
-      const ex=vj.x-vi.x, ey=vj.y-vi.y;
-      const len=Math.sqrt(ex*ex+ey*ey)||1;
-      const nx=-ey/len, ny=ex/len; // perpendicular inward
-      const proj = dx*nx + dy*ny;
-      const nv = S.drag.snapVerts.map((v,i)=>{
-        if(i===S.drag.idx||(i===(S.drag.idx+1)%S.verts.length)){
-          return {x:v.x+nx*proj, y:v.y+ny*proj};
-        }
-        return {...v};
-      });
-      const c=centroid(nv);
-      if(c.area>500) S.verts=nv;
-    }
-    cv.style.cursor='grabbing';
-    return;
-  }
-
-  // hover checks
-  let hv=-1, he=-1, hz=-1, onRing=false;
-  for(let i=0;i<S.verts.length;i++){
-    if(dst(x,y,S.verts[i].x,S.verts[i].y)<VRAD+4){ hv=i; break; }
-  }
-  if(hv<0){
-    const mids=edgeMid(S.verts);
-    for(let i=0;i<mids.length;i++){
-      if(dst(x,y,mids[i].x,mids[i].y)<ERAD+4){ he=i; break; }
-    }
-  }
-  if(hv<0&&he<0&&S.verts.length>2){
-    const cen=centroid(S.verts);
-    const bb2=bbox(S.verts);
-    const ringR=Math.min(bb2.w,bb2.h)*0.52;
-    onRing = Math.abs(dst(x,y,cen.x,cen.y)-ringR)<14;
-    hz=zoneAt(x,y,cen);
+    document.getElementById('compassAngle').textContent=`${ang.toFixed(1)}°  |  ${zn}`;
   }
   S.hovV=hv; S.hovE=he; S.hovZone=hz;
   if(S.tool==='rot') cv.style.cursor='crosshair';
-  else if(hv>=0||he>=0) cv.style.cursor='grab';
-  else if(onRing) cv.style.cursor='grab';
+  else if(IMG.el&&IMG.visible&&imgHitTest(x,y)&&(_activeTab==='image'||e.altKey)) cv.style.cursor='move';
+  else if(hv>=0||he>=0||onRing) cv.style.cursor='grab';
   else if(hz>=0) cv.style.cursor='pointer';
   else cv.style.cursor='crosshair';
 });
 
 cv.addEventListener('mouseup', e=>{
-  if(S.pan.on){ S.pan.on=false; cv.style.cursor='grab'; return; }
-  if(S.rotDrag.on){ S.rotDrag.on=false; cv.style.cursor= S.tool==='rot'?'crosshair':'crosshair'; return; }
-  if(S.drag.on){
-    S.drag.on=false;
-    if(S.tool==='pan') cv.style.cursor='grab';
-    return;
-  }
-  // click zone (only in sel tool)
-  if(S.tool==='sel'){
+  const wasDrag=IMG.drag.on||S.rotDrag.on||S.drag.on||S.pan.on;
+  IMG.drag.on=false; S.rotDrag.on=false; S.drag.on=false; S.pan.on=false;
+  if(wasDrag) return;
+  if(S.tool==='sel'&&S.verts.length>2){
     const {x,y}=mxy(e);
-    if(S.verts.length>2){
-      const cen=centroid(S.verts);
-      const z=zoneAt(x,y,cen);
-      if(z>=0){ S.selZone=z; updateZoneCard(z); }
-    }
+    const z=zoneAt(x,y,centroid(S.verts));
+    if(z>=0){S.selZone=z; updateZoneCard(z); switchTab('zone');}
   }
 });
 
-cv.addEventListener('mouseleave', ()=>{
-  S.drag.on=false; S.pan.on=false; S.rotDrag.on=false;
-  S.hovV=-1; S.hovE=-1; S.hovZone=-1;
-  S.compassAngle=-1; S.compassX=-1;
+cv.addEventListener('mouseleave',()=>{
+  IMG.drag.on=false; S.rotDrag.on=false; S.drag.on=false; S.pan.on=false;
+  S.hovV=-1; S.hovE=-1; S.hovZone=-1; IMG.showHint=false;
+  S.compassAngle=S.vaastuRot;
+  S.compassX=(S.vaastuRot/360)*document.getElementById('compassBar').width;
   document.getElementById('compassAngle').textContent='— °  |  —';
 });
 
@@ -1661,6 +1611,7 @@ const _origRender = render;
 // TAB SWITCHING
 // ═══════════════════════════════════════════════════════
 function switchTab(id){
+  _activeTab = id;
   document.querySelectorAll('.rptab').forEach(t=>t.classList.remove('act'));
   document.querySelectorAll('.rptabcontent').forEach(t=>t.classList.remove('act'));
   document.getElementById('tab-'+id).classList.add('act');
@@ -1730,9 +1681,14 @@ function toggleImgOnCanvas(){
 }
 
 function updateImgOpacity(v){
-  IMG.opacity=v/100;
-  document.getElementById('imgOpVal').textContent=v+'%';
-  document.getElementById('imgOpacity').value=v;
+  IMG.opacity = v/100;
+  const valEl = document.getElementById('imgOpVal');
+  if(valEl) valEl.textContent = v+'%';
+  // sync both sliders
+  const s1 = document.getElementById('imgOpSlider');
+  const s2 = document.getElementById('imgOpacity');
+  if(s1 && s1.value!=v) s1.value=v;
+  if(s2 && s2.value!=v) s2.value=v;
 }
 
 function updateImgScale(v){
@@ -1806,47 +1762,15 @@ function drawImgOverlay(){
   if(IMG.showHint){
     cx.save();
     cx.font='10px Inter'; cx.textAlign='center'; cx.textBaseline='middle';
-    cx.fillStyle='rgba(9,14,22,0.85)';
-    cx.beginPath(); cx.roundRect(cen.x+IMG.x-75, cen.y+IMG.y+H/2*IMG.scale+8, 150, 18, 4); cx.fill();
-    cx.fillStyle='rgba(78,205,196,0.9)';
-    cx.fillText('Alt+Drag to move image', cen.x+IMG.x, cen.y+IMG.y+H/2*IMG.scale+17);
+    const tipY = cen.y + IMG.y + H/2 + 14;
+    cx.fillStyle='rgba(9,14,22,0.88)';
+    cx.beginPath(); cx.roundRect(cen.x+IMG.x-80, tipY-9, 160, 18, 4); cx.fill();
+    cx.fillStyle='rgba(78,205,196,0.95)';
+    cx.fillText('Alt + Drag to reposition image', cen.x+IMG.x, tipY);
     cx.restore();
   }
 }
 
-// Canvas drag for image overlay — Alt+drag moves image, plain drag on image also works
-cv.addEventListener('mousedown', e=>{
-  if(!IMG.el||!IMG.visible) return;
-  const {x,y}=mxy(e);
-  const cen = S.verts.length>2 ? centroid(S.verts) : {x:cv.width/2,y:cv.height/2};
-  // Check if click is within the rotated image bounds using inverse rotation
-  const rot = ((IMG.lockToVaastu ? S.vaastuRot : 0) + IMG.extraRot) * Math.PI/180;
-  const dx=x-(cen.x+IMG.x), dy=y-(cen.y+IMG.y);
-  const rx = dx*Math.cos(-rot) - dy*Math.sin(-rot);
-  const ry = dx*Math.sin(-rot) + dy*Math.cos(-rot);
-  const W=IMG.el.naturalWidth*IMG.scale, H=IMG.el.naturalHeight*IMG.scale;
-  const inBounds = rx>=-W/2 && rx<=W/2 && ry>=-H/2 && ry<=H/2;
-  if(e.altKey && inBounds){
-    IMG.drag={on:true,sx:x,sy:y,ox:IMG.x,oy:IMG.y};
-    cv.style.cursor='move';
-    e.stopPropagation();
-  }
-}, true);
-
-cv.addEventListener('mousemove', e=>{
-  if(IMG.drag.on){
-    const {x,y}=mxy(e);
-    IMG.x=IMG.drag.ox+(x-IMG.drag.sx);
-    IMG.y=IMG.drag.oy+(y-IMG.drag.sy);
-    cv.style.cursor='move';
-  }
-  // show hint when Alt held and image loaded
-  if(IMG.el && IMG.visible){
-    IMG.showHint = e.altKey;
-  }
-}, true);
-
-cv.addEventListener('mouseup', ()=>{ IMG.drag.on=false; IMG.showHint=false; }, true);
 
 // ═══════════════════════════════════════════════════════
 // AI ANALYSIS — Anthropic API
